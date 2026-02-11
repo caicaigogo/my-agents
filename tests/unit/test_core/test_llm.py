@@ -25,11 +25,13 @@ class TestHelloAgentsLLM(unittest.TestCase):
     def test_invoke(self):
 
         response = self.llm.invoke(self.messages)
+        print(response)
         self.assertIsInstance(response, str)
 
     def test_stream_invoke(self):
 
         response = self.llm.stream_invoke(self.messages)
+        print(response)
         self.assertIsInstance(response, Iterator)
         for _ in response:
             pass
