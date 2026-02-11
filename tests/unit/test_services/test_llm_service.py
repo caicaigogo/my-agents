@@ -4,7 +4,7 @@ from app.services.llm_service import get_llm, reset_llm
 from hello_agents import HelloAgentsLLM
 
 
-class TestHelloAgentsLLM(unittest.TestCase):
+class TestLLMService(unittest.TestCase):
 
     def setUp(self):
 
