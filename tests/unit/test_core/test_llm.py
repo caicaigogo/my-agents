@@ -9,12 +9,6 @@ class TestHelloAgentsLLM(unittest.TestCase):
 
     def setUp(self):
         load_dotenv()
-        self.original_env = {
-            'LLM_MODEL_ID': os.getenv('LLM_MODEL_ID'),
-            'LLM_API_KEY': os.getenv('LLM_API_KEY'),
-            'LLM_BASE_URL': os.getenv('LLM_BASE_URL'),
-            'LLM_TIMEOUT': os.getenv('LLM_TIMEOUT')
-        }
         use_third_party = False
         if use_third_party:
             self.llm = HelloAgentsLLM()
