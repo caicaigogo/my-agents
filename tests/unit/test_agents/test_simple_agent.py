@@ -132,3 +132,41 @@ class TestSimpleAgent(unittest.TestCase):
         print(enhance_tool_system_prompt)
         self.assertTrue(one_tool_name in enhance_tool_system_prompt)
         self.assertTrue(one_tool_description in enhance_tool_system_prompt)
+
+    def test_func_invoke(self):
+
+        calculate_tool = CalculatorTool()
+        one_tool_name = calculate_tool.name
+        one_tool_description = calculate_tool.description
+
+        tool_registry = ToolRegistry()
+
+        # 注册计算器函数
+        tool_registry.register_function(
+            name=one_tool_name,
+            description=one_tool_description,
+            func=calculate
+        )
+
+        system_prompt = '你是能使用tools的人工智能agent'
+
+        function_agent = SimpleAgent(
+            name="function agent demo",
+            llm=self.llm,
+            system_prompt=system_prompt,
+            tool_registry=tool_registry,
+            enable_tool_calling=True
+        )
+
+        user_query = '请帮忙计算下 5+3'
+        # glm-4-flash: python_calculator\n5+3
+        # 指令跟随能力不强
+
+        # glm-4.7-flash -> `[TOOL_CALL:python_calculator:expression=5+3]`
+        # glm-4.7-flash, 指令跟随能力有进步，但是多了参数名 expression
+
+        func_invoke_result = function_agent.run(user_query)
+        print(function_agent._get_enhanced_system_prompt())
+        print('---')
+        print(func_invoke_result)
+        print('---')
