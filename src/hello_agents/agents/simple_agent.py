@@ -188,7 +188,6 @@ class SimpleAgent(Agent):
 
         return {'input': parameters}
 
-
     def run(self, input_text: str, max_tool_iterations: int = 3, **kwargs) -> str:
         """
         运行SimpleAgent，支持可选的工具调用
@@ -243,4 +242,26 @@ class SimpleAgent(Agent):
                     tool_results.append(result)
                     # 从响应中移除工具调用标记
                     clean_response = clean_response.replace(call['original'], "")
-            return tool_results
+
+                # 构建包含工具结果的消息
+                messages.append({"role": "assistant", "content": clean_response})
+
+                # 添加工具结果
+                tool_results_text = "\n\n".join(tool_results)
+                messages.append({"role": "user", "content": f"工具执行结果：\n{tool_results_text}\n\n请基于这些结果给出完整的回答。"})
+
+                current_iteration += 1
+                continue
+
+            # 没有工具调用，这是最终回答
+            final_response = response
+            break
+
+        # 如果超过最大迭代次数，获取最后一次回答
+        if current_iteration >= max_tool_iterations and not final_response:
+            final_response = self.llm.invoke(messages, **kwargs)
+
+        # 保存到历史记录
+        self.add_message(Message(input_text, "user"))
+        self.add_message(Message(final_response, "assistant"))
+        return final_response

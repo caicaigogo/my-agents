@@ -5,7 +5,7 @@ from hello_agents.tools import ToolRegistry
 
 class TestToolRegistry(unittest.TestCase):
 
-    def test_register_function(self):
+    def test_register(self):
 
         calculate_tool = CalculatorTool()
         tool_registry = ToolRegistry()
@@ -34,6 +34,17 @@ class TestToolRegistry(unittest.TestCase):
         tool_registry.unregister(tool_name)
         self.assertIsNone(
             tool_registry.get_function(tool_name)
+        )
+
+        # 注册计算器函数
+        tool_registry.register_tool(calculate_tool)
+        print(tool_registry._tools)
+
+        self.assertEqual('11', tool_registry.execute_tool(tool_name, input_text='5+3 * 2'))
+
+        tool_registry.unregister(tool_name)
+        self.assertIsNone(
+            tool_registry.get_tool(tool_name)
         )
 
     def test_tools_description(self):

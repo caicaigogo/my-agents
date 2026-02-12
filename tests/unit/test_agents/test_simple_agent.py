@@ -75,20 +75,11 @@ class TestSimpleAgent(unittest.TestCase):
         print(response)
         self.assertRegex(response, '小丑')
 
-    def test_function_prompt(self):
+    def test_enhance_tool_prompt(self):
 
         calculate_tool = CalculatorTool()
-        one_tool_name = calculate_tool.name
-        one_tool_description = calculate_tool.description
-
         tool_registry = ToolRegistry()
-
-        # 注册计算器函数
-        tool_registry.register_function(
-            name=one_tool_name,
-            description=one_tool_description,
-            func=calculate
-        )
+        tool_registry.register_tool(calculate_tool)
 
         system_prompt = '你是能使用tools的人工智能agent'
 
@@ -130,27 +121,18 @@ class TestSimpleAgent(unittest.TestCase):
         # - 工具调用结果会自动插入到对话中，然后你可以基于结果继续回答
 
         print(enhance_tool_system_prompt)
-        self.assertTrue(one_tool_name in enhance_tool_system_prompt)
-        self.assertTrue(one_tool_description in enhance_tool_system_prompt)
+        self.assertTrue(calculate_tool.name in enhance_tool_system_prompt)
+        self.assertTrue(calculate_tool.description in enhance_tool_system_prompt)
 
-    def test_func_invoke(self):
+    def test_tool_invoke(self):
 
         calculate_tool = CalculatorTool()
-        one_tool_name = calculate_tool.name
-        one_tool_description = calculate_tool.description
-
         tool_registry = ToolRegistry()
-
-        # 注册计算器函数
-        tool_registry.register_function(
-            name=one_tool_name,
-            description=one_tool_description,
-            func=calculate
-        )
+        tool_registry.register_tool(calculate_tool)
 
         system_prompt = '你是能使用tools的人工智能agent'
 
-        function_agent = SimpleAgent(
+        tool_invoke_agent = SimpleAgent(
             name="function agent demo",
             llm=self.llm,
             system_prompt=system_prompt,
@@ -165,12 +147,10 @@ class TestSimpleAgent(unittest.TestCase):
         # glm-4.7-flash -> `[TOOL_CALL:python_calculator:expression=5+3]`
         # glm-4.7-flash, 指令跟随能力有进步，但是多了参数名 expression
 
-        func_invoke_result = function_agent.run(user_query)
-        print(tool_registry)
-        print(func_invoke_result)
+        tool_invoke_agent.run(user_query)
+        print(tool_invoke_agent.get_history())
 
-
-    def test_func_parse_tool_parameters(self):
+    def test_parse_tool_calls(self):
         llm_tool_useage_response = '`[TOOL_CALL:python_calculator:expression=5+3]`'
 
         simple_agent = SimpleAgent(

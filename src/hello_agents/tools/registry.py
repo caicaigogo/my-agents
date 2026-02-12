@@ -17,6 +17,22 @@ class ToolRegistry:
         self._tools: dict[str, Tool] = {}
         self._functions: dict[str, dict[str, Any]] = {}
 
+    def register_tool(self, tool: Tool, auto_expand: bool = True):
+        """
+        注册Tool对象
+
+        Args:
+            tool: Tool实例
+            auto_expand: 是否自动展开可展开的工具（默认True）
+        """
+
+        # 普通工具或不展开的工具
+        if tool.name in self._tools:
+            print(f"⚠️ 警告：工具 '{tool.name}' 已存在，将被覆盖。")
+
+        self._tools[tool.name] = tool
+        print(f"✅ 工具 '{tool.name}' 已注册。")
+
     def register_function(self, name: str, description: str, func: Callable[[str], str]):
         """
         直接注册函数作为工具（简便方式）
@@ -66,9 +82,17 @@ class ToolRegistry:
         Returns:
             工具执行结果
         """
+        # 优先查找Tool对象
+        if name in self._tools:
+            tool = self._tools[name]
+            try:
+                # 简化参数传递，直接传入字符串
+                return tool.run({"input": input_text})
+            except Exception as e:
+                return f"错误：执行工具 '{name}' 时发生异常: {str(e)}"
 
         # 查找函数工具
-        if name in self._functions:
+        elif name in self._functions:
             func = self._functions[name]["func"]
             try:
                 return func(input_text)
@@ -86,6 +110,10 @@ class ToolRegistry:
             工具描述字符串，用于构建提示词
         """
         descriptions = []
+
+        # Tool对象描述
+        for tool in self._tools.values():
+            descriptions.append(f"- {tool.name}: {tool.description}")
 
         # 函数工具描述
         for name, info in self._functions.items():
