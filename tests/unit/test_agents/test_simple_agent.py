@@ -166,7 +166,19 @@ class TestSimpleAgent(unittest.TestCase):
         # glm-4.7-flash, 指令跟随能力有进步，但是多了参数名 expression
 
         func_invoke_result = function_agent.run(user_query)
-        print(function_agent._get_enhanced_system_prompt())
-        print('---')
+        print(tool_registry)
         print(func_invoke_result)
-        print('---')
+
+
+    def test_func_parse_tool_parameters(self):
+        llm_tool_useage_response = '`[TOOL_CALL:python_calculator:expression=5+3]`'
+
+        simple_agent = SimpleAgent(
+            name="simple agent demo",
+            llm=self.llm,
+        )
+
+        parse_tool_calls = simple_agent._parse_tool_calls(llm_tool_useage_response)
+
+        # [{'tool_name': 'python_calculator', 'parameters': 'expression=5+3', 'original': '[TOOL_CALL:python_calculator:expression=5+3]'}]
+        print(parse_tool_calls)

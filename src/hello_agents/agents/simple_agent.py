@@ -1,5 +1,5 @@
 # """简单Agent实现 - 基于OpenAI原生API"""
-
+import re
 from typing import Optional, TYPE_CHECKING
 
 from ..core.agent import Agent
@@ -74,6 +74,121 @@ class SimpleAgent(Agent):
 
         return base_prompt + tools_section
 
+    def _parse_tool_calls(self, text: str) -> list:
+        """解析文本中的工具调用"""
+        pattern = r'\[TOOL_CALL:([^:]+):([^\]]+)\]'
+        matches = re.findall(pattern, text)
+
+        tool_calls = []
+        for tool_name, parameters in matches:
+            tool_calls.append({
+                'tool_name': tool_name.strip(),
+                'parameters': parameters.strip(),
+                'original': f'[TOOL_CALL:{tool_name}:{parameters}]'
+            })
+
+        return tool_calls
+
+    def _execute_tool_call(self, tool_name: str, parameters: str) -> str:
+        """执行工具调用"""
+        if not self.tool_registry:
+            return f"❌ 错误：未配置工具注册表"
+
+        try:
+            # 获取Tool对象
+            tool = self.tool_registry.get_tool(tool_name)
+            if not tool:
+                return f"❌ 错误：未找到工具 '{tool_name}'"
+
+            # 智能参数解析
+            param_dict = self._parse_tool_parameters(tool_name, parameters)
+
+            # 调用工具
+            result = tool.run(param_dict)
+            return f"🔧 工具 {tool_name} 执行结果：\n{result}"
+
+        except Exception as e:
+            return f"❌ 工具调用失败：{str(e)}"
+
+    def _parse_tool_parameters(self, tool_name: str, parameters: str) -> dict:
+        """智能解析工具参数"""
+        import json
+        param_dict = {}
+
+        # 尝试解析JSON格式
+        if parameters.strip().startswith('{'):
+            try:
+                param_dict = json.loads(parameters)
+                # JSON解析成功，进行类型转换
+                param_dict = self._convert_parameter_types(tool_name, param_dict)
+                return param_dict
+            except json.JSONDecodeError:
+                # JSON解析失败，继续使用其他方式
+                pass
+
+        if '=' in parameters:
+            # 格式: key=value 或 action=search,query=Python
+            if ',' in parameters:
+                # 多个参数：action=search,query=Python,limit=3
+                pairs = parameters.split(',')
+                for pair in pairs:
+                    if '=' in pair:
+                        key, value = pair.split('=', 1)
+                        param_dict[key.strip()] = value.strip()
+            else:
+                # 单个参数：key=value
+                key, value = parameters.split('=', 1)
+                param_dict[key.strip()] = value.strip()
+
+            # 类型转换
+            param_dict = self._convert_parameter_types(tool_name, param_dict)
+
+            # 智能推断action（如果没有指定）
+            if 'action' not in param_dict:
+                param_dict = self._infer_action(tool_name, param_dict)
+        else:
+            # 直接传入参数，根据工具类型智能推断
+            param_dict = self._infer_simple_parameters(tool_name, parameters)
+
+        return param_dict
+
+
+    def _convert_parameter_types(self, tool_name: str, param_dict: dict) -> dict:
+        """
+        根据工具的参数定义转换参数类型
+
+        Args:
+            tool_name: 工具名称
+            param_dict: 参数字典
+
+        Returns:
+            类型转换后的参数字典
+        """
+        if not self.tool_registry:
+            return param_dict
+
+        tool = self.tool_registry.get_tool(tool_name)
+        if not tool:
+            return param_dict
+
+        # 获取工具的参数定义
+        try:
+            tool_params = tool.get_parameters()
+        except:
+            return param_dict
+
+    def _infer_action(self, tool_name: str, param_dict: dict) -> dict:
+        """根据工具类型和参数推断action"""
+        pass
+
+        return param_dict
+
+    def _infer_simple_parameters(self, tool_name: str, parameters: str) -> dict:
+        """为简单参数推断完整的参数字典"""
+
+        return {'input': parameters}
+
+
     def run(self, input_text: str, max_tool_iterations: int = 3, **kwargs) -> str:
         """
         运行SimpleAgent，支持可选的工具调用
@@ -101,7 +216,31 @@ class SimpleAgent(Agent):
         messages.append({"role": "user", "content": input_text})
 
         # 如果没有启用工具调用，使用原有逻辑
-        response = self.llm.invoke(messages, **kwargs)
-        self.add_message(Message(input_text, "user"))
-        self.add_message(Message(response, "assistant"))
-        return response
+        if not self.enable_tool_calling:
+            response = self.llm.invoke(messages, **kwargs)
+            self.add_message(Message(input_text, "user"))
+            self.add_message(Message(response, "assistant"))
+            return response
+
+        # 迭代处理，支持多轮工具调用
+        current_iteration = 0
+        final_response = ""
+
+        while current_iteration < max_tool_iterations:
+            # 调用LLM
+            response = self.llm.invoke(messages, **kwargs)
+
+            # 检查是否有工具调用
+            tool_calls = self._parse_tool_calls(response)
+
+            if tool_calls:
+                # 执行所有工具调用并收集结果
+                tool_results = []
+                clean_response = response
+
+                for call in tool_calls:
+                    result = self._execute_tool_call(call['tool_name'], call['parameters'])
+                    tool_results.append(result)
+                    # 从响应中移除工具调用标记
+                    clean_response = clean_response.replace(call['original'], "")
+            return tool_results
