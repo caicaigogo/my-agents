@@ -2,7 +2,7 @@ import unittest
 from dotenv import load_dotenv
 from app.services.llm_service import get_llm
 from hello_agents.agents import SimpleAgent
-from hello_agents.tools.builtin.calculator import CalculatorTool, calculate
+from hello_agents.tools.builtin.calculator import CalculatorTool
 from hello_agents.tools import ToolRegistry
 
 
