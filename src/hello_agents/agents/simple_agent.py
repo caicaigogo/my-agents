@@ -44,6 +44,36 @@ class SimpleAgent(Agent):
         if not self.enable_tool_calling or not self.tool_registry:
             return base_prompt
 
+        # 获取工具描述
+        tools_description = self.tool_registry.get_tools_description()
+        if not tools_description or tools_description == "暂无可用工具":
+            return base_prompt
+
+        tools_section = "\n\n## 可用工具\n"
+        tools_section += "你可以使用以下工具来帮助回答问题：\n"
+        tools_section += tools_description + "\n"
+
+        tools_section += "\n## 工具调用格式\n"
+        tools_section += "当需要使用工具时，请使用以下格式：\n"
+        tools_section += "`[TOOL_CALL:{tool_name}:{parameters}]`\n\n"
+
+        tools_section += "### 参数格式说明\n"
+        tools_section += "1. **多个参数**：使用 `key=value` 格式，用逗号分隔\n"
+        tools_section += "   示例：`[TOOL_CALL:calculator_multiply:a=12,b=8]`\n"
+        tools_section += "   示例：`[TOOL_CALL:filesystem_read_file:path=README.md]`\n\n"
+        tools_section += "2. **单个参数**：直接使用 `key=value`\n"
+        tools_section += "   示例：`[TOOL_CALL:search:query=Python编程]`\n\n"
+        tools_section += "3. **简单查询**：可以直接传入文本\n"
+        tools_section += "   示例：`[TOOL_CALL:search:Python编程]`\n\n"
+
+        tools_section += "### 重要提示\n"
+        tools_section += "- 参数名必须与工具定义的参数名完全匹配\n"
+        tools_section += "- 数字参数直接写数字，不需要引号：`a=12` 而不是 `a=\"12\"`\n"
+        tools_section += "- 文件路径等字符串参数直接写：`path=README.md`\n"
+        tools_section += "- 工具调用结果会自动插入到对话中，然后你可以基于结果继续回答\n"
+
+        return base_prompt + tools_section
+
     def run(self, input_text: str, max_tool_iterations: int = 3, **kwargs) -> str:
         """
         运行SimpleAgent，支持可选的工具调用
@@ -75,4 +105,3 @@ class SimpleAgent(Agent):
         self.add_message(Message(input_text, "user"))
         self.add_message(Message(response, "assistant"))
         return response
-

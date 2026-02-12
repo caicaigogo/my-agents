@@ -73,3 +73,18 @@ class ToolRegistry:
 
         else:
             return f"错误：未找到名为 '{name}' 的工具。"
+
+    def get_tools_description(self) -> str:
+        """
+        获取所有可用工具的格式化描述字符串
+
+        Returns:
+            工具描述字符串，用于构建提示词
+        """
+        descriptions = []
+
+        # 函数工具描述
+        for name, info in self._functions.items():
+            descriptions.append(f"- {name}: {info['description']}")
+
+        return "\n".join(descriptions) if descriptions else "暂无可用工具"
