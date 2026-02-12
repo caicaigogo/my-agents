@@ -46,3 +46,28 @@ class TestSimpleAgent(unittest.TestCase):
         self.assertEqual(second_round_response_dict['content'], second_response)
 
         print(second_response)
+
+        self.simple_agent.clear_history()
+
+        empty_history = self.simple_agent.get_history()
+        self.assertEqual(len(empty_history), 0)
+
+        empty_test_query = '我刚才说了什么'
+        empty_test_response = self.simple_agent.run(empty_test_query)
+        print(empty_test_response)
+
+    def test_system_prompt(self):
+
+        system_prompt = '假装你是个小丑'
+        system_check_agent = SimpleAgent(
+            name="system_check agent demo",
+            llm=self.llm,
+            system_prompt=system_prompt
+        )
+        init_history = system_check_agent.get_history()
+        self.assertListEqual([], init_history)
+
+        query = '你是什么'
+        response = system_check_agent.run(query)
+        print(response)
+        self.assertRegex(response, '小丑')
