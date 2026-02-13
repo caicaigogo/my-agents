@@ -1,6 +1,7 @@
-# """简单Agent实现 - 基于OpenAI原生API"""
+"""简单Agent实现 - 基于OpenAI原生API"""
+
+from typing import Optional, Iterator, TYPE_CHECKING
 import re
-from typing import Optional, TYPE_CHECKING
 
 from ..core.agent import Agent
 from ..core.llm import HelloAgentsLLM
@@ -10,17 +11,18 @@ from ..core.message import Message
 if TYPE_CHECKING:
     from ..tools.registry import ToolRegistry
 
+
 class SimpleAgent(Agent):
     """简单的对话Agent，支持可选的工具调用"""
 
     def __init__(
-        self,
-        name: str,
-        llm: HelloAgentsLLM,
-        system_prompt: Optional[str] = None,
-        config: Optional[Config] = None,
-        tool_registry: Optional['ToolRegistry'] = None,
-        enable_tool_calling: bool = True
+            self,
+            name: str,
+            llm: HelloAgentsLLM,
+            system_prompt: Optional[str] = None,
+            config: Optional[Config] = None,
+            tool_registry: Optional['ToolRegistry'] = None,
+            enable_tool_calling: bool = True
     ):
         """
         初始化SimpleAgent
@@ -152,7 +154,6 @@ class SimpleAgent(Agent):
 
         return param_dict
 
-
     def _convert_parameter_types(self, tool_name: str, param_dict: dict) -> dict:
         """
         根据工具的参数定义转换参数类型
@@ -261,7 +262,8 @@ class SimpleAgent(Agent):
         while current_iteration < max_tool_iterations:
             # 调用LLM
             response = self.llm.invoke(messages, **kwargs)
-            print(response)
+
+            # 检查是否有工具调用
             tool_calls = self._parse_tool_calls(response)
 
             # 有工具调用，执行工具后后，再将模型输出的工具调用输出（清洗掉工具占位）、具执行结果作为User输入后，再次调用模型，获得最终结果
@@ -298,4 +300,72 @@ class SimpleAgent(Agent):
         # 保存到历史记录
         self.add_message(Message(input_text, "user"))
         self.add_message(Message(final_response, "assistant"))
+
         return final_response
+
+    def add_tool(self, tool, auto_expand: bool = True) -> None:
+        """
+        添加工具到Agent（便利方法）
+
+        Args:
+            tool: Tool对象
+            auto_expand: 是否自动展开可展开的工具（默认True）
+
+        如果工具是可展开的（expandable=True），会自动展开为多个独立工具
+        """
+        if not self.tool_registry:
+            from ..tools.registry import ToolRegistry
+            self.tool_registry = ToolRegistry()
+            self.enable_tool_calling = True
+
+        # 直接使用 ToolRegistry 的 register_tool 方法
+        # ToolRegistry 会自动处理工具展开
+        self.tool_registry.register_tool(tool, auto_expand=auto_expand)
+
+    def remove_tool(self, tool_name: str) -> bool:
+        """移除工具（便利方法）"""
+        if self.tool_registry:
+            return self.tool_registry.unregister(tool_name)
+        return False
+
+    def list_tools(self) -> list:
+        """列出所有可用工具"""
+        if self.tool_registry:
+            return self.tool_registry.list_tools()
+        return []
+
+    def has_tools(self) -> bool:
+        """检查是否有可用工具"""
+        return self.enable_tool_calling and self.tool_registry is not None
+
+    def stream_run(self, input_text: str, **kwargs) -> Iterator[str]:
+        """
+        流式运行Agent
+
+        Args:
+            input_text: 用户输入
+            **kwargs: 其他参数
+
+        Yields:
+            Agent响应片段
+        """
+        # 构建消息列表
+        messages = []
+
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+
+        for msg in self._history:
+            messages.append({"role": msg.role, "content": msg.content})
+
+        messages.append({"role": "user", "content": input_text})
+
+        # 流式调用LLM
+        full_response = ""
+        for chunk in self.llm.stream_invoke(messages, **kwargs):
+            full_response += chunk
+            yield chunk
+
+        # 保存完整对话到历史记录
+        self.add_message(Message(input_text, "user"))
+        self.add_message(Message(full_response, "assistant"))
