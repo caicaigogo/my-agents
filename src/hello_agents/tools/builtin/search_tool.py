@@ -57,9 +57,7 @@ class SearchTool(Tool):
     def __init__(
         self,
         backend: str = "hybrid",
-        tavily_key: str | None = None,
-        serpapi_key: str | None = None,
-        perplexity_key: str | None = None,
+        tavily_key: str | None = None
     ) -> None:
         super().__init__(
             name="search",
