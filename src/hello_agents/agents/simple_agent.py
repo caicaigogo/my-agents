@@ -177,6 +177,39 @@ class SimpleAgent(Agent):
         except:
             return param_dict
 
+        # 创建参数类型映射
+        param_types = {}
+        for param in tool_params:
+            param_types[param.name] = param.type
+
+        # 转换参数类型
+        converted_dict = {}
+        for key, value in param_dict.items():
+            if key in param_types:
+                param_type = param_types[key]
+                try:
+                    if param_type == 'number' or param_type == 'integer':
+                        # 转换为数字
+                        if isinstance(value, str):
+                            converted_dict[key] = float(value) if param_type == 'number' else int(value)
+                        else:
+                            converted_dict[key] = value
+                    elif param_type == 'boolean':
+                        # 转换为布尔值
+                        if isinstance(value, str):
+                            converted_dict[key] = value.lower() in ('true', '1', 'yes')
+                        else:
+                            converted_dict[key] = bool(value)
+                    else:
+                        converted_dict[key] = value
+                except (ValueError, TypeError):
+                    # 转换失败，保持原值
+                    converted_dict[key] = value
+            else:
+                converted_dict[key] = value
+
+        return converted_dict
+
     def _infer_action(self, tool_name: str, param_dict: dict) -> dict:
         """根据工具类型和参数推断action"""
         pass
@@ -228,10 +261,11 @@ class SimpleAgent(Agent):
         while current_iteration < max_tool_iterations:
             # 调用LLM
             response = self.llm.invoke(messages, **kwargs)
-
-            # 检查是否有工具调用
+            print(response)
             tool_calls = self._parse_tool_calls(response)
 
+            # 有工具调用，执行工具后后，再将模型输出的工具调用输出（清洗掉工具占位）、具执行结果作为User输入后，再次调用模型，获得最终结果
+            # 没有工具调用，直接以response作为结果输出。 并退出循环。
             if tool_calls:
                 # 执行所有工具调用并收集结果
                 tool_results = []

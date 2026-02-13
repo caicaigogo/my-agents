@@ -1,8 +1,16 @@
 """工具基类"""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, List
+from pydantic import BaseModel
 
+class ToolParameter(BaseModel):
+    """工具参数定义"""
+    name: str
+    type: str
+    description: str
+    required: bool = True
+    default: Any = None
 
 
 class Tool(ABC):
@@ -33,3 +41,14 @@ class Tool(ABC):
     def run(self, parameters: Dict[str, Any]) -> str:
         """执行工具"""
         pass
+
+    @abstractmethod
+    def get_parameters(self) -> List[ToolParameter]:
+        """获取工具参数定义"""
+        pass
+
+    def __str__(self) -> str:
+        return f"Tool(name={self.name})"
+
+    def __repr__(self) -> str:
+        return self.__str__()

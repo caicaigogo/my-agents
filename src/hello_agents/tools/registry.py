@@ -120,3 +120,20 @@ class ToolRegistry:
             descriptions.append(f"- {name}: {info['description']}")
 
         return "\n".join(descriptions) if descriptions else "暂无可用工具"
+
+    def list_tools(self) -> list[str]:
+        """列出所有工具名称"""
+        return list(self._tools.keys()) + list(self._functions.keys())
+
+    def get_all_tools(self) -> list[Tool]:
+        """获取所有Tool对象"""
+        return list(self._tools.values())
+
+    def clear(self):
+        """清空所有工具"""
+        self._tools.clear()
+        self._functions.clear()
+        print("🧹 所有工具已清空。")
+
+# 全局工具注册表
+global_registry = ToolRegistry()

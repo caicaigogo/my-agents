@@ -9,7 +9,7 @@ from ..base import Tool
 
 class CalculatorTool(Tool):
     """Python计算器工具"""
-#
+
     # 支持的操作符
     OPERATORS = {
         ast.Add: operator.add,
@@ -100,6 +100,17 @@ class CalculatorTool(Tool):
         else:
             raise ValueError(f"不支持的表达式类型: {type(node)}")
 
+    def get_parameters(self):
+        """获取工具参数定义"""
+        from ..base import ToolParameter
+        return [
+            ToolParameter(
+                name="input",
+                type="string",
+                description="要计算的数学表达式，支持基本运算和数学函数",
+                required=True
+            )
+        ]
 
 # 便捷函数
 def calculate(expression: str) -> str:
