@@ -39,6 +39,13 @@ class TestCalculatorTool(unittest.TestCase):
         self.assertEqual('3.141592653589793', calculate('pi'))
         self.assertEqual('2.718281828459045', calculate('e'))
 
+    def test_tool_run(self):
+
+        calculate_tool = CalculatorTool()
+        parameters = {'input': '5+3'}
+        result = calculate_tool.run(parameters)
+        self.assertEqual('8', result)
+
     def test_tool_invoke(self):
 
         calculate_tool = CalculatorTool()

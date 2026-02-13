@@ -17,6 +17,12 @@ dependencies = [
     "uvicorn[standard]>=0.32.0"
 ]
 
+[project.optional-dependencies]
+# 搜索功能依赖
+search = [
+    "tavily-python>=0.7.12"
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
