@@ -11,18 +11,17 @@ from ..core.message import Message
 if TYPE_CHECKING:
     from ..tools.registry import ToolRegistry
 
-
 class SimpleAgent(Agent):
     """简单的对话Agent，支持可选的工具调用"""
 
     def __init__(
-            self,
-            name: str,
-            llm: HelloAgentsLLM,
-            system_prompt: Optional[str] = None,
-            config: Optional[Config] = None,
-            tool_registry: Optional['ToolRegistry'] = None,
-            enable_tool_calling: bool = True
+        self,
+        name: str,
+        llm: HelloAgentsLLM,
+        system_prompt: Optional[str] = None,
+        config: Optional[Config] = None,
+        tool_registry: Optional['ToolRegistry'] = None,
+        enable_tool_calling: bool = True
     ):
         """
         初始化SimpleAgent
@@ -213,14 +212,36 @@ class SimpleAgent(Agent):
 
     def _infer_action(self, tool_name: str, param_dict: dict) -> dict:
         """根据工具类型和参数推断action"""
-        pass
+        if tool_name == 'memory':
+            if 'recall' in param_dict:
+                param_dict['action'] = 'search'
+                param_dict['query'] = param_dict.pop('recall')
+            elif 'store' in param_dict:
+                param_dict['action'] = 'add'
+                param_dict['content'] = param_dict.pop('store')
+            elif 'query' in param_dict:
+                param_dict['action'] = 'search'
+            elif 'content' in param_dict:
+                param_dict['action'] = 'add'
+        elif tool_name == 'rag':
+            if 'search' in param_dict:
+                param_dict['action'] = 'search'
+                param_dict['query'] = param_dict.pop('search')
+            elif 'query' in param_dict:
+                param_dict['action'] = 'search'
+            elif 'text' in param_dict:
+                param_dict['action'] = 'add_text'
 
         return param_dict
 
     def _infer_simple_parameters(self, tool_name: str, parameters: str) -> dict:
         """为简单参数推断完整的参数字典"""
-
-        return {'input': parameters}
+        if tool_name == 'rag':
+            return {'action': 'search', 'query': parameters}
+        elif tool_name == 'memory':
+            return {'action': 'search', 'query': parameters}
+        else:
+            return {'input': parameters}
 
     def run(self, input_text: str, max_tool_iterations: int = 3, **kwargs) -> str:
         """
@@ -261,9 +282,9 @@ class SimpleAgent(Agent):
 
         while current_iteration < max_tool_iterations:
             # 调用LLM
-            print(messages)
+            # print(messages)
             response = self.llm.invoke(messages, **kwargs)
-            print(response)
+            # print(response)
 
             # 检查是否有工具调用
             tool_calls = self._parse_tool_calls(response)
