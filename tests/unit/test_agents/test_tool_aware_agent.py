@@ -6,7 +6,7 @@ from hello_agents.tools.builtin.calculator import CalculatorTool
 from hello_agents.tools import ToolRegistry
 
 
-class TestSimpleAgent(unittest.TestCase):
+class TestToolAwareAgent(unittest.TestCase):
 
     def setUp(self):
         load_dotenv()
