@@ -14,13 +14,21 @@ dependencies = [
     "pydantic>=2.0.0,<3.0.0",
     "pydantic-settings>=2.0.0",
     "fastapi",
-    "uvicorn[standard]>=0.32.0"
+    "uvicorn[standard]>=0.32.0",
+
+    # 基础工具库
+    "numpy>=2.0.0,<3.0.0"
 ]
 
 [project.optional-dependencies]
 # 搜索功能依赖
 search = [
     "tavily-python>=0.7.12"
+]
+
+# 记忆系统依赖
+memory = [
+    "scikit-learn>=1.0.0",           # 机器学习工具
 ]
 
 [tool.setuptools.packages.find]

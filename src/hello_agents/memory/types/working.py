@@ -80,6 +80,32 @@ class WorkingMemory(BaseMemory):
 
         # 尝试语义向量检索（如果有嵌入模型）
         vector_scores = {}
+        try:
+            # 简单的语义相似度计算（使用TF-IDF或其他轻量级方法）
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+
+            # 准备文档
+            documents = [query] + [m.content for m in filtered_memories]
+
+            # TF-IDF向量化
+            vectorizer = TfidfVectorizer(stop_words=None, lowercase=True)
+            tfidf_matrix = vectorizer.fit_transform(documents)
+
+            # 计算相似度
+            query_vector = tfidf_matrix[0:1]
+            doc_vectors = tfidf_matrix[1:]
+
+            similarities = cosine_similarity(query_vector, doc_vectors).flatten()
+
+            # 存储向量分数
+            for i, memory in enumerate(filtered_memories):
+                vector_scores[memory.id] = similarities[i]
+
+        except Exception as e:
+            # 如果向量检索失败，回退到关键词匹配
+            vector_scores = {}
 
         # 计算最终分数
         query_lower = query.lower()
@@ -141,6 +167,7 @@ class WorkingMemory(BaseMemory):
 
                 return True
         return False
+
 
     def _calculate_priority(self, memory: MemoryItem) -> float:
         """计算记忆优先级"""
