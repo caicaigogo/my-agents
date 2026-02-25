@@ -150,6 +150,35 @@ class WorkingMemory(BaseMemory):
         scored_memories.sort(key=lambda x: x[0], reverse=True)
         return [memory for _, memory in scored_memories[:limit]]
 
+    def update(
+        self,
+        memory_id: str,
+        content: str = None,
+        importance: float = None,
+        metadata: Dict[str, Any] = None
+    ) -> bool:
+        """更新工作记忆"""
+        for memory in self.memories:
+            if memory.id == memory_id:
+                old_tokens = len(memory.content.split())
+
+                if content is not None:
+                    memory.content = content
+                    # 更新token计数
+                    new_tokens = len(content.split())
+                    self.current_tokens = self.current_tokens - old_tokens + new_tokens
+
+                if importance is not None:
+                    memory.importance = importance
+
+                if metadata is not None:
+                    memory.metadata.update(metadata)
+
+                # 重新计算优先级并更新堆
+                self._update_heap_priority(memory)
+
+                return True
+        return False
 
     def remove(self, memory_id: str) -> bool:
         """删除工作记忆"""
@@ -168,6 +197,134 @@ class WorkingMemory(BaseMemory):
                 return True
         return False
 
+    def has_memory(self, memory_id: str) -> bool:
+        """检查记忆是否存在"""
+        return any(memory.id == memory_id for memory in self.memories)
+
+    def clear(self):
+        """清空所有工作记忆"""
+        self.memories.clear()
+        self.memory_heap.clear()
+        self.current_tokens = 0
+
+    def get_stats(self) -> Dict[str, Any]:
+        """获取工作记忆统计信息"""
+        # 过期清理（惰性）
+        self._expire_old_memories()
+
+        # 工作记忆中的记忆都是活跃的（已遗忘的记忆会被直接删除）
+        active_memories = self.memories
+
+        return {
+            "count": len(active_memories),  # 活跃记忆数量
+            "forgotten_count": 0,  # 工作记忆中已遗忘的记忆会被直接删除
+            "total_count": len(self.memories),  # 总记忆数量
+            "current_tokens": self.current_tokens,
+            "max_capacity": self.max_capacity,
+            "max_tokens": self.max_tokens,
+            "max_age_minutes": self.max_age_minutes,
+            "session_duration_minutes": (datetime.now() - self.session_start).total_seconds() / 60,
+            "avg_importance": sum(m.importance for m in active_memories) / len(active_memories) if active_memories else 0.0,
+            "capacity_usage": len(active_memories) / self.max_capacity if self.max_capacity > 0 else 0.0,
+            "token_usage": self.current_tokens / self.max_tokens if self.max_tokens > 0 else 0.0,
+            "memory_type": "working"
+        }
+
+    def get_recent(self, limit: int = 10) -> List[MemoryItem]:
+        """获取最近的记忆"""
+        sorted_memories = sorted(
+            self.memories,
+            key=lambda x: x.timestamp,
+            reverse=True
+        )
+        return sorted_memories[:limit]
+
+    def get_important(self, limit: int = 10) -> List[MemoryItem]:
+        """获取重要记忆"""
+        sorted_memories = sorted(
+            self.memories,
+            key=lambda x: x.importance,
+            reverse=True
+        )
+        return sorted_memories[:limit]
+
+    def get_all(self) -> List[MemoryItem]:
+        """获取所有记忆"""
+        return self.memories.copy()
+
+    def get_context_summary(self, max_length: int = 500) -> str:
+        """获取上下文摘要"""
+        if not self.memories:
+            return "No working memories available."
+
+        # 按重要性和时间排序
+        sorted_memories = sorted(
+            self.memories,
+            key=lambda m: (m.importance, m.timestamp),
+            reverse=True
+        )
+
+        summary_parts = []
+        current_length = 0
+
+        for memory in sorted_memories:
+            content = memory.content
+            if current_length + len(content) <= max_length:
+                summary_parts.append(content)
+                current_length += len(content)
+            else:
+                # 截断最后一个记忆
+                remaining = max_length - current_length
+                if remaining > 50:  # 至少保留50个字符
+                    summary_parts.append(content[:remaining] + "...")
+                break
+
+        return "Working Memory Context:\n" + "\n".join(summary_parts)
+
+    def forget(self, strategy: str = "importance_based", threshold: float = 0.1, max_age_days: int = 1) -> int:
+        """工作记忆遗忘机制"""
+        forgotten_count = 0
+        current_time = datetime.now()
+
+        to_remove = []
+
+        # 始终先执行TTL过期（分钟级）
+        cutoff_ttl = current_time - timedelta(minutes=self.max_age_minutes)
+        for memory in self.memories:
+            if memory.timestamp < cutoff_ttl:
+                to_remove.append(memory.id)
+
+        if strategy == "importance_based":
+            # 删除低重要性记忆
+            for memory in self.memories:
+                if memory.importance < threshold:
+                    to_remove.append(memory.id)
+
+        elif strategy == "time_based":
+            # 删除过期记忆（工作记忆通常以小时计算）
+            cutoff_time = current_time - timedelta(hours=max_age_days * 24)
+            for memory in self.memories:
+                if memory.timestamp < cutoff_time:
+                    to_remove.append(memory.id)
+
+        elif strategy == "capacity_based":
+            # 删除超出容量的记忆
+            if len(self.memories) > self.max_capacity:
+                # 按优先级排序，删除最低的
+                sorted_memories = sorted(
+                    self.memories,
+                    key=lambda m: self._calculate_priority(m)
+                )
+                excess_count = len(self.memories) - self.max_capacity
+                for memory in sorted_memories[:excess_count]:
+                    to_remove.append(memory.id)
+
+        # 执行删除
+        for memory_id in to_remove:
+            if self.remove(memory_id):
+                forgotten_count += 1
+
+        return forgotten_count
 
     def _calculate_priority(self, memory: MemoryItem) -> float:
         """计算记忆优先级"""
@@ -240,6 +397,14 @@ class WorkingMemory(BaseMemory):
 
         if lowest_memory:
             self.remove(lowest_memory.id)
+
+    def _update_heap_priority(self, memory: MemoryItem):
+        """更新堆中记忆的优先级"""
+        # 简单实现：重建堆
+        self.memory_heap = []
+        for mem in self.memories:
+            priority = self._calculate_priority(mem)
+            heapq.heappush(self.memory_heap, (-priority, mem.timestamp, mem))
 
     def _mark_deleted_in_heap(self, memory_id: str):
         """在堆中标记删除的记忆"""

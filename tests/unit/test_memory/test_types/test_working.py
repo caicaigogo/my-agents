@@ -97,3 +97,11 @@ class TestWorkingMemory(unittest.TestCase):
            query = '函数 这 东西 不 重要'
            retrieve_results = self.memory.retrieve(query)
            print(retrieve_results)
+
+    def test_get_stats(self):
+
+        stats = self.memory.get_stats()
+        # {'count': 2, 'forgotten_count': 0, 'total_count': 2, 'current_tokens': 13, 'max_capacity': 10,
+        #  'max_tokens': 2000, 'max_age_minutes': 120, 'session_duration_minutes': 1.6666666666666667e-05,
+        #  'avg_importance': 0.35, 'capacity_usage': 0.2, 'token_usage': 0.0065, 'memory_type': 'working'}
+        print(stats)

@@ -151,6 +151,116 @@ class MemoryManager:
         all_results.sort(key=lambda x: x.importance, reverse=True)
         return all_results[:limit]
 
+    def update_memory(
+        self,
+        memory_id: str,
+        content: Optional[str] = None,
+        importance: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """更新记忆
+
+        Args:
+            memory_id: 记忆ID
+            content: 新内容
+            importance: 新重要性
+            metadata: 新元数据
+
+        Returns:
+            是否更新成功
+        """
+        # 查找记忆所在的类型
+        for memory_type, memory_instance in self.memory_types.items():
+            if memory_instance.has_memory(memory_id):
+                return memory_instance.update(memory_id, content, importance, metadata)
+
+        logger.warning(f"未找到记忆: {memory_id}")
+        return False
+
+    def remove_memory(self, memory_id: str) -> bool:
+        """删除记忆
+
+        Args:
+            memory_id: 记忆ID
+
+        Returns:
+            是否删除成功
+        """
+        for memory_type, memory_instance in self.memory_types.items():
+            if memory_instance.has_memory(memory_id):
+                return memory_instance.remove(memory_id)
+
+        logger.warning(f"未找到记忆: {memory_id}")
+        return False
+
+    def forget_memories(
+        self,
+        strategy: str = "importance_based",
+        threshold: float = 0.1,
+        max_age_days: int = 30
+    ) -> int:
+        """记忆遗忘机制
+
+        Args:
+            strategy: 遗忘策略 ("importance_based", "time_based", "capacity_based")
+            threshold: 遗忘阈值
+            max_age_days: 最大保存天数
+
+        Returns:
+            遗忘的记忆数量
+        """
+        total_forgotten = 0
+
+        for memory_type, memory_instance in self.memory_types.items():
+            if hasattr(memory_instance, 'forget'):
+                forgotten = memory_instance.forget(strategy, threshold, max_age_days)
+                total_forgotten += forgotten
+
+        logger.info(f"记忆遗忘完成: {total_forgotten} 条记忆")
+        return total_forgotten
+
+    def consolidate_memories(
+        self,
+        from_type: str = "working",
+        to_type: str = "episodic",
+        importance_threshold: float = 0.7
+    ) -> int:
+        """记忆整合 - 将重要的短期记忆转换为长期记忆
+
+        Args:
+            from_type: 源记忆类型
+            to_type: 目标记忆类型
+            importance_threshold: 重要性阈值
+
+        Returns:
+            整合的记忆数量
+        """
+        if from_type not in self.memory_types or to_type not in self.memory_types:
+            logger.warning(f"记忆类型不存在: {from_type} -> {to_type}")
+            return 0
+
+        # 获取高重要性的源记忆
+        source_memory = self.memory_types[from_type]
+        target_memory = self.memory_types[to_type]
+
+        # 获取需要整合的记忆
+        all_memories = source_memory.get_all()
+        candidates = [
+            m for m in all_memories
+            if m.importance >= importance_threshold
+        ]
+
+        consolidated_count = 0
+        for memory in candidates:
+            # 移动到目标记忆类型
+            if source_memory.remove(memory.id):
+                memory.memory_type = to_type
+                memory.importance *= 1.1  # 提升重要性
+                target_memory.add(memory)
+                consolidated_count += 1
+
+        logger.info(f"记忆整合完成: {consolidated_count} 条记忆从 {from_type} 转移到 {to_type}")
+        return consolidated_count
 
     def get_memory_stats(self) -> Dict[str, Any]:
         """获取记忆统计信息"""
@@ -173,6 +283,13 @@ class MemoryManager:
             stats["total_memories"] += type_stats.get("count", 0)
 
         return stats
+
+    def clear_all_memories(self):
+        """清空所有记忆"""
+        for memory_type, memory_instance in self.memory_types.items():
+            memory_instance.clear()
+        logger.info("所有记忆已清空")
+
 
     def _calculate_importance(self, content: str, metadata: Optional[Dict[str, Any]]) -> float:
         """计算记忆重要性"""
