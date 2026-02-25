@@ -11,7 +11,7 @@ class TestWorkingMemory(unittest.TestCase):
         self.memory = WorkingMemory(self.config)
 
         importance = 0.2
-        content = '这东西不重要'
+        content = '这 东西 不 重要'
 
         metadata = {}
 
@@ -36,7 +36,7 @@ class TestWorkingMemory(unittest.TestCase):
 
         importance = 0.5
 
-        content = '用户刚才问了关于Python函数的问题'
+        content = '用户 刚才 问 了 关于 Python 函数 的 问题'
 
         metadata = {}
 
@@ -62,49 +62,38 @@ class TestWorkingMemory(unittest.TestCase):
 
     def test_add(self):
 
+        # [MemoryItem(id='4282c8c6-9cf2-4ca1-9a2d-a3d172222726', content='这 东西 不 重要', memory_type='working',
+        #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 16, 4, 27, 406965), importance=0.2,
+        #             metadata={'session_id': 'session_20260225_160427', 'timestamp': '2026-02-25T16:04:27.405968'}),
+        #  MemoryItem(id='8c808163-903c-4e45-872a-d570f8bc67c9', content='用户 刚才 问 了 关于 Python 函数 的 问题', memory_type='working',
+        #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 16, 4, 27, 406965), importance=0.5,
+        #             metadata={'session_id': 'session_20260225_160427', 'timestamp': '2026-02-25T16:04:27.406965'})]
+        # [(-0.5, datetime.datetime(2026, 2, 25, 16, 4, 27, 406965),
+        #   MemoryItem(id='8c808163-903c-4e45-872a-d570f8bc67c9', content='用户 刚才 问 了 关于 Python 函数 的 问题',
+        #              memory_type='working', user_id='default_user',
+        #              timestamp=datetime.datetime(2026, 2, 25, 16, 4, 27, 406965), importance=0.5,
+        #              metadata={'session_id': 'session_20260225_160427', 'timestamp': '2026-02-25T16:04:27.406965'})), (
+        #  -0.2, datetime.datetime(2026, 2, 25, 16, 4, 27, 406965),
+        #  MemoryItem(id='4282c8c6-9cf2-4ca1-9a2d-a3d172222726', content='这 东西 不 重要', memory_type='working',
+        #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 16, 4, 27, 406965), importance=0.2,
+        #             metadata={'session_id': 'session_20260225_160427', 'timestamp': '2026-02-25T16:04:27.405968'}))]
         print(self.memory.memories)
         print(self.memory.memory_heap)
 
-    # [MemoryItem(id='c1a265ea-bcf9-4624-b753-0e6395c09c5c', content='这东西不重要', memory_type='working',
-    #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 14, 6, 58, 304328), importance=0.2,
-    #             metadata={'session_id': 'session_20260225_140658', 'timestamp': '2026-02-25T14:06:58.304328'}),
-    #  MemoryItem(id='c0e9f4b4-cd40-4938-841a-0c706ef9d09c', content='用户刚才问了关于Python函数的问题', memory_type='working',
-    #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 14, 6, 58, 305320), importance=0.5,
-    #             metadata={'session_id': 'session_20260225_140658', 'timestamp': '2026-02-25T14:06:58.304328'})]
-    # [(-0.5, datetime.datetime(2026, 2, 25, 14, 6, 58, 305320),
-    #   MemoryItem(id='c0e9f4b4-cd40-4938-841a-0c706ef9d09c', content='用户刚才问了关于Python函数的问题', memory_type='working',
-    #              user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 14, 6, 58, 305320),
-    #              importance=0.5,
-    #              metadata={'session_id': 'session_20260225_140658', 'timestamp': '2026-02-25T14:06:58.304328'})), (
-    #  -0.2, datetime.datetime(2026, 2, 25, 14, 6, 58, 304328),
-    #  MemoryItem(id='c1a265ea-bcf9-4624-b753-0e6395c09c5c', content='这东西不重要', memory_type='working',
-    #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 14, 6, 58, 304328), importance=0.2,
-    #             metadata={'session_id': 'session_20260225_140658', 'timestamp': '2026-02-25T14:06:58.304328'}))]
-
     def test_retrieve(self):
 
-           query = '东西'
-           retrieve_results = self.memory.retrieve(query)
-
-           # [MemoryItem(id='9233ddb7-bd88-4f38-b874-24e2492623ee', content='这东西不重要', memory_type='working',
-           #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 15, 16, 0, 507322),
+           # vector score
+           # {'5108b047-e6f5-4c08-9ff3-120e30111d5b': np.float64(0.816496580927726),
+           #  '850aabb8-8cfa-4317-b4f6-04d3b3334c6c': np.float64(0.1859081826077956)}
+           # [MemoryItem(id='5108b047-e6f5-4c08-9ff3-120e30111d5b', content='这 东西 不 重要', memory_type='working',
+           #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 16, 1, 31, 582641),
            #             importance=0.2,
-           #             metadata={'session_id': 'session_20260225_151600', 'timestamp': '2026-02-25T15:16:00.507322'})]
-           print(retrieve_results)
+           #             metadata={'session_id': 'session_20260225_160131', 'timestamp': '2026-02-25T16:01:31.582641'}),
+           #  MemoryItem(id='850aabb8-8cfa-4317-b4f6-04d3b3334c6c', content='用户 刚才 问 了 关于 Python 函数 的 问题',
+           #             memory_type='working', user_id='default_user',
+           #             timestamp=datetime.datetime(2026, 2, 25, 16, 1, 31, 582641), importance=0.5,
+           #             metadata={'session_id': 'session_20260225_160131', 'timestamp': '2026-02-25T16:01:31.582641'})]
 
-           query = '函数'
-           retrieve_results = self.memory.retrieve(query)
-
-           # [MemoryItem(id='36631d4f-0aab-407a-aad8-b3529d7ef5ba', content='用户刚才问了关于Python函数的问题', memory_type='working',
-           #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 15, 17, 31, 341112),
-           #             importance=0.5,
-           #             metadata={'session_id': 'session_20260225_151731', 'timestamp': '2026-02-25T15:17:31.341112'})]
-           print(retrieve_results)
-
-           # [MemoryItem(id='a5077a26-4c71-44d3-a30a-8a32fa5374a6', content='这东西不重要', memory_type='working',
-           #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 25, 15, 19, 51, 399877),
-           #             importance=0.2,
-           #             metadata={'session_id': 'session_20260225_151951', 'timestamp': '2026-02-25T15:19:51.399877'})]
-           query = '函数 这东西不重要'
+           query = '函数 这 东西 不 重要'
            retrieve_results = self.memory.retrieve(query)
            print(retrieve_results)
