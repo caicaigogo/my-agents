@@ -8,7 +8,9 @@ import logging
 from .base import MemoryItem, MemoryConfig
 
 from .types.working import WorkingMemory
-
+# from .types.episodic import EpisodicMemory
+# from .types.semantic import SemanticMemory
+# from .types.perceptual import PerceptualMemory
 # 存储和检索功能已被各记忆类型内部实现替代
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,14 @@ class MemoryManager:
         if enable_working:
             self.memory_types['working'] = WorkingMemory(self.config)
 
+        # if enable_episodic:
+        #     self.memory_types['episodic'] = EpisodicMemory(self.config)
+        #
+        # if enable_semantic:
+        #     self.memory_types['semantic'] = SemanticMemory(self.config)
+        #
+        # if enable_perceptual:
+        #     self.memory_types['perceptual'] = PerceptualMemory(self.config)
 
         logger.info(f"MemoryManager初始化完成，启用记忆类型: {list(self.memory_types.keys())}")
 
@@ -67,7 +77,10 @@ class MemoryManager:
         Returns:
             记忆ID
         """
-
+#         # 自动分类记忆类型
+#         if auto_classify:
+#             memory_type = self._classify_memory_type(content, metadata)
+#
         # 计算重要性
         if importance is None:
             importance = self._calculate_importance(content, metadata)
@@ -90,6 +103,54 @@ class MemoryManager:
             return memory_id
         else:
             raise ValueError(f"不支持的记忆类型: {memory_type}")
+
+    def retrieve_memories(
+        self,
+        query: str,
+        memory_types: Optional[List[str]] = None,
+        limit: int = 10,
+        min_importance: float = 0.0,
+        time_range: Optional[tuple] = None
+    ) -> List[MemoryItem]:
+        """检索记忆
+
+        Args:
+            query: 查询内容
+            memory_types: 要检索的记忆类型列表
+            limit: 返回数量限制
+            min_importance: 最小重要性阈值
+            time_range: 时间范围 (start_time, end_time)
+
+        Returns:
+            检索到的记忆列表
+        """
+        if memory_types is None:
+            memory_types = list(self.memory_types.keys())
+
+        # 从各个记忆类型中检索
+        all_results = []
+        per_type_limit = max(1, limit // len(memory_types))
+
+        for memory_type in memory_types:
+            if memory_type in self.memory_types:
+                memory_instance = self.memory_types[memory_type]
+                try:
+                    # 使用各个记忆类型自己的检索方法
+                    type_results = memory_instance.retrieve(
+                        query=query,
+                        limit=per_type_limit,
+                        min_importance=min_importance,
+                        user_id=self.user_id
+                    )
+                    all_results.extend(type_results)
+                except Exception as e:
+                    logger.warning(f"检索 {memory_type} 记忆时出错: {e}")
+                    continue
+
+        # 按重要性和相关性排序
+        all_results.sort(key=lambda x: x.importance, reverse=True)
+        return all_results[:limit]
+
 
     def get_memory_stats(self) -> Dict[str, Any]:
         """获取记忆统计信息"""

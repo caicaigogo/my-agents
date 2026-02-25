@@ -75,6 +75,13 @@ class MemoryTool(Tool):
                 file_path=parameters.get("file_path"),
                 modality=parameters.get("modality")
             )
+        elif action == "search":
+            return self._search_memory(
+                query=parameters.get("query"),
+                limit=parameters.get("limit", 5),
+                memory_type=parameters.get("memory_type"),
+                min_importance=parameters.get("min_importance", 0.1)
+            )
 
     @tool_action("memory_add", "添加新记忆到记忆系统中")
     def _add_memory(
@@ -122,3 +129,58 @@ class MemoryTool(Tool):
 
         except Exception as e:
             return f"❌ 添加记忆失败: {str(e)}"
+
+    @tool_action("memory_search", "搜索相关记忆")
+    def _search_memory(
+        self,
+        query: str,
+        limit: int = 5,
+        memory_type: str = None,
+        min_importance: float = 0.1
+    ) -> str:
+        """搜索记忆
+
+        Args:
+            query: 搜索查询内容
+            limit: 搜索结果数量限制
+            memory_type: 限定记忆类型：working/episodic/semantic/perceptual
+            min_importance: 最低重要性阈值
+
+        Returns:
+            搜索结果
+        """
+        try:
+            # 处理memory_type参数
+            memory_types = [memory_type] if memory_type else None
+
+            results = self.memory_manager.retrieve_memories(
+                query=query,
+                limit=limit,
+                memory_types=memory_types,
+                min_importance=min_importance
+            )
+
+            if not results:
+                return f"🔍 未找到与 '{query}' 相关的记忆"
+
+            # 格式化结果
+            formatted_results = []
+            formatted_results.append(f"🔍 找到 {len(results)} 条相关记忆:")
+
+            for i, memory in enumerate(results, 1):
+                memory_type_label = {
+                    "working": "工作记忆",
+                    "episodic": "情景记忆",
+                    "semantic": "语义记忆",
+                    "perceptual": "感知记忆"
+                }.get(memory.memory_type, memory.memory_type)
+
+                content_preview = memory.content[:80] + "..." if len(memory.content) > 80 else memory.content
+                formatted_results.append(
+                    f"{i}. [{memory_type_label}] {content_preview} (重要性: {memory.importance:.2f})"
+                )
+
+            return "\n".join(formatted_results)
+
+        except Exception as e:
+            return f"❌ 搜索记忆失败: {str(e)}"

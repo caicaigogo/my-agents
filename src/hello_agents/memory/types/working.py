@@ -60,6 +60,71 @@ class WorkingMemory(BaseMemory):
 
         return memory_item.id
 
+    def retrieve(self, query: str, limit: int = 5, user_id: str = None, **kwargs) -> List[MemoryItem]:
+        """检索工作记忆 - 混合语义向量检索和关键词匹配"""
+        # 过期清理
+        self._expire_old_memories()
+        if not self.memories:
+            return []
+
+        # 过滤已遗忘的记忆
+        active_memories = [m for m in self.memories if not m.metadata.get("forgotten", False)]
+
+        # 按用户ID过滤（如果提供）
+        filtered_memories = active_memories
+        if user_id:
+            filtered_memories = [m for m in active_memories if m.user_id == user_id]
+
+        if not filtered_memories:
+            return []
+
+        # 尝试语义向量检索（如果有嵌入模型）
+        vector_scores = {}
+
+        # 计算最终分数
+        query_lower = query.lower()
+        scored_memories = []
+
+        for memory in filtered_memories:
+            content_lower = memory.content.lower()
+
+            # 获取向量分数（如果有）
+            vector_score = vector_scores.get(memory.id, 0.0)
+
+            # 关键词匹配分数
+            keyword_score = 0.0
+            if query_lower in content_lower:
+                keyword_score = len(query_lower) / len(content_lower)
+            else:
+                # 分词匹配
+                query_words = set(query_lower.split())
+                content_words = set(content_lower.split())
+                intersection = query_words.intersection(content_words)
+                if intersection:
+                    keyword_score = len(intersection) / len(query_words.union(content_words)) * 0.8
+
+            # 混合分数：向量检索 + 关键词匹配
+            if vector_score > 0:
+                base_relevance = vector_score * 0.7 + keyword_score * 0.3
+            else:
+                base_relevance = keyword_score
+
+            # 时间衰减
+            time_decay = self._calculate_time_decay(memory.timestamp)
+            base_relevance *= time_decay
+
+            # 重要性权重
+            importance_weight = 0.8 + (memory.importance * 0.4)
+            final_score = base_relevance * importance_weight
+
+            if final_score > 0:
+                scored_memories.append((final_score, memory))
+
+        # 按分数排序并返回
+        scored_memories.sort(key=lambda x: x[0], reverse=True)
+        return [memory for _, memory in scored_memories[:limit]]
+
+
     def remove(self, memory_id: str) -> bool:
         """删除工作记忆"""
         for i, memory in enumerate(self.memories):
