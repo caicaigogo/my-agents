@@ -141,7 +141,7 @@ def create_research_chain() -> ToolChain:
 
     # 步骤2：基于搜索结果进行计算
     chain.add_step(
-        tool_name="my_calculator",
+        tool_name="python_calculator",
         input_template="2 + 2",  # 简单的计算示例
         output_key="calc_result"
     )
@@ -158,7 +158,7 @@ def create_simple_chain() -> ToolChain:
 
     # 只包含一个计算步骤
     chain.add_step(
-        tool_name="my_calculator",
+        tool_name="python_calculator",
         input_template="{input}",
         output_key="result"
     )
