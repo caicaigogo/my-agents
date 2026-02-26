@@ -178,3 +178,68 @@ class SQLiteDocumentStore(DocumentStore):
 
         conn.commit()
         return memory_id
+
+
+    def search_memories(
+        self,
+        user_id: Optional[str] = None,
+        memory_type: Optional[str] = None,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        importance_threshold: Optional[float] = None,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """搜索记忆"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # 构建查询条件
+        where_conditions = []
+        params = []
+
+        if user_id:
+            where_conditions.append("user_id = ?")
+            params.append(user_id)
+
+        if memory_type:
+            where_conditions.append("memory_type = ?")
+            params.append(memory_type)
+
+        if start_time:
+            where_conditions.append("timestamp >= ?")
+            params.append(start_time)
+
+        if end_time:
+            where_conditions.append("timestamp <= ?")
+            params.append(end_time)
+
+        if importance_threshold:
+            where_conditions.append("importance >= ?")
+            params.append(importance_threshold)
+
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+
+        cursor.execute(f"""
+            SELECT id, user_id, content, memory_type, timestamp, importance, properties, created_at
+            FROM memories
+            {where_clause}
+            ORDER BY importance DESC, timestamp DESC
+            LIMIT ?
+        """, params + [limit])
+
+        memories = []
+        for row in cursor.fetchall():
+            memories.append({
+                "memory_id": row["id"],
+                "user_id": row["user_id"],
+                "content": row["content"],
+                "memory_type": row["memory_type"],
+                "timestamp": row["timestamp"],
+                "importance": row["importance"],
+                "properties": json.loads(row["properties"]) if row["properties"] else {},
+                "created_at": row["created_at"]
+            })
+
+        return memories
