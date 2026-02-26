@@ -6,7 +6,9 @@
 """
 
 from abc import ABC, abstractmethod
+from typing import List, Dict, Any, Optional
 import sqlite3
+import json
 import os
 import threading
 
@@ -141,3 +143,38 @@ class SQLiteDocumentStore(DocumentStore):
 
         conn.commit()
         print("[OK] SQLite 数据库表和索引创建完成")
+
+    def add_memory(
+        self,
+        memory_id: str,
+        user_id: str,
+        content: str,
+        memory_type: str,
+        timestamp: int,
+        importance: float,
+        properties: Dict[str, Any] = None
+    ) -> str:
+        """添加记忆"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # 确保用户存在
+        cursor.execute("INSERT OR IGNORE INTO users (id, name) VALUES (?, ?)", (user_id, user_id))
+
+        # 插入记忆
+        cursor.execute("""
+            INSERT OR REPLACE INTO memories
+            (id, user_id, content, memory_type, timestamp, importance, properties, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (
+            memory_id,
+            user_id,
+            content,
+            memory_type,
+            timestamp,
+            importance,
+            json.dumps(properties) if properties else None
+        ))
+
+        conn.commit()
+        return memory_id

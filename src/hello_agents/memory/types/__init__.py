@@ -8,9 +8,14 @@
 """
 
 from .working import WorkingMemory
+from .episodic import EpisodicMemory, Episode
 
 
 __all__ = [
     # 记忆类型
     "WorkingMemory",
+    "EpisodicMemory",   
+
+    # 辅助类
+    "Episode",
 ]
