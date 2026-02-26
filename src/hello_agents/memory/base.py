@@ -65,3 +65,12 @@ class BaseMemory(ABC):
             记忆ID
         """
         pass
+
+    def _generate_id(self) -> str:
+        """生成记忆ID"""
+        import uuid
+        return str(uuid.uuid4())
+
+
+    def __repr__(self) -> str:
+        return self.__str__()
