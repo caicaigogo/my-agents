@@ -28,7 +28,13 @@ search = [
 
 # 记忆系统依赖
 memory = [
+    "qdrant-client>=1.9.0",          # 向量数据库（已兼容1.16.0+新API）
     "scikit-learn>=1.0.0",           # 机器学习工具
+]
+
+# 全部功能（不含evaluation-bfcl，因其与numpy>=2.0冲突）
+all = [
+    "hello-agents[search,memory]",
 ]
 
 [tool.setuptools.packages.find]

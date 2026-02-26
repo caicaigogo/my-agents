@@ -28,3 +28,6 @@ class TestTFIDFEmbedding(unittest.TestCase):
         print(encode_result)
         # <class 'numpy.ndarray'>
         print(type(encode_result))
+
+        # <class 'list'>
+        print(type(encode_result.tolist()))
