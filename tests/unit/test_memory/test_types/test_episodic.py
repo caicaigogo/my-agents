@@ -70,3 +70,14 @@ class TestEpisodicMemory(unittest.TestCase):
         #             metadata={'session_id': 'session_20260226_134203', 'context': {}, 'outcome': None,
         #                       'relevance_score': 0.5280000000000001})]
         print(retrieve_results)
+
+    def test_get_stats(self):
+
+        stats = self.memory.get_stats()
+
+        # {'count': 0, 'forgotten_count': 0, 'total_count': 0, 'sessions_count': 0, 'avg_importance': 0.0,
+        #  'time_span_days': 0.0, 'memory_type': 'episodic',
+        #  'document_store': {'users_count': 1, 'memories_count': 8, 'concepts_count': 0, 'memory_concepts_count': 0,
+        #                     'concept_relationships_count': 0, 'store_type': 'sqlite',
+        #                     'db_path': './memory_data\\memory.db'}}
+        print(stats)

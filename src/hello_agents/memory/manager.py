@@ -8,9 +8,8 @@ import logging
 from .base import MemoryItem, MemoryConfig
 
 from .types.working import WorkingMemory
-# from .types.episodic import EpisodicMemory
-# from .types.semantic import SemanticMemory
-# from .types.perceptual import PerceptualMemory
+from .types.episodic import EpisodicMemory
+
 # 存储和检索功能已被各记忆类型内部实现替代
 
 logger = logging.getLogger(__name__)
@@ -46,14 +45,8 @@ class MemoryManager:
         if enable_working:
             self.memory_types['working'] = WorkingMemory(self.config)
 
-        # if enable_episodic:
-        #     self.memory_types['episodic'] = EpisodicMemory(self.config)
-        #
-        # if enable_semantic:
-        #     self.memory_types['semantic'] = SemanticMemory(self.config)
-        #
-        # if enable_perceptual:
-        #     self.memory_types['perceptual'] = PerceptualMemory(self.config)
+        if enable_episodic:
+            self.memory_types['episodic'] = EpisodicMemory(self.config)
 
         logger.info(f"MemoryManager初始化完成，启用记忆类型: {list(self.memory_types.keys())}")
 
