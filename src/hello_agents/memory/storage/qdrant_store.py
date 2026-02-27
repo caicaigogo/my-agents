@@ -24,6 +24,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# 设置日志级别
+logger.setLevel(logging.DEBUG)  # 或 INFO, WARNING, ERROR, CRITICAL
+
 
 class QdrantConnectionManager:
     """Qdrant连接管理器 - 防止重复连接和初始化"""
