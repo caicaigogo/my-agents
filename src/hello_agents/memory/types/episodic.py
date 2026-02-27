@@ -134,7 +134,18 @@ class EpisodicMemory(BaseMemory):
             embedding = self.embedder.encode(memory_item.content)
             if hasattr(embedding, "tolist"):
                 embedding = embedding.tolist()
-
+            self.vector_store.add_vectors(
+                vectors=[embedding],
+                metadata=[{
+                    "memory_id": memory_item.id,
+                    "user_id": memory_item.user_id,
+                    "memory_type": "episodic",
+                    "importance": memory_item.importance,
+                    "session_id": session_id,
+                    "content": memory_item.content
+                }],
+                ids=[memory_item.id]
+            )
         except Exception:
             # 向量入库失败不影响权威存储
             pass
@@ -230,6 +241,29 @@ class EpisodicMemory(BaseMemory):
             properties=metadata
         )
 
+        # 如内容变更，重嵌入并upsert到Qdrant
+        if content is not None:
+            try:
+                embedding = self.embedder.encode(content)
+                if hasattr(embedding, "tolist"):
+                    embedding = embedding.tolist()
+                # 获取更新后的记录以同步payload
+                doc = self.doc_store.get_memory(memory_id)
+                payload = {
+                    "memory_id": memory_id,
+                    "user_id": doc["user_id"] if doc else "",
+                    "memory_type": "episodic",
+                    "importance": (doc.get("importance") if doc else importance) or 0.5,
+                    "session_id": (doc.get("properties", {}) or {}).get("session_id"),
+                    "content": content
+                }
+                self.vector_store.add_vectors(
+                    vectors=[embedding],
+                    metadata=[payload],
+                    ids=[memory_id]
+                )
+            except Exception:
+                pass
 
         return updated or doc_updated
 
