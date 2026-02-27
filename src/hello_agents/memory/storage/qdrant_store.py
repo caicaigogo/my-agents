@@ -24,9 +24,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# 设置日志级别
-logger.setLevel(logging.DEBUG)  # 或 INFO, WARNING, ERROR, CRITICAL
-
 
 class QdrantConnectionManager:
     """Qdrant连接管理器 - 防止重复连接和初始化"""
@@ -52,7 +49,7 @@ class QdrantConnectionManager:
             with cls._lock:
                 # 双重检查锁定
                 if key not in cls._instances:
-                    logger.debug(f"🔄 创建新的Qdrant连接: {collection_name}")
+                    logger.warning(f"🔄 创建新的Qdrant连接: {collection_name}")
                     cls._instances[key] = QdrantVectorStore(
                         url=url,
                         api_key=api_key,
@@ -63,9 +60,9 @@ class QdrantConnectionManager:
                         **kwargs
                     )
                 else:
-                    logger.debug(f"♻️ 复用现有Qdrant连接: {collection_name}")
+                    logger.warning(f"♻️ 复用现有Qdrant连接: {collection_name}")
         else:
-            logger.debug(f"♻️ 复用现有Qdrant连接: {collection_name}")
+            logger.warning(f"♻️ 复用现有Qdrant连接: {collection_name}")
 
         return cls._instances[key]
 
@@ -141,14 +138,14 @@ class QdrantVectorStore:
                     api_key=self.api_key,
                     timeout=self.timeout
                 )
-                logger.info(f"✅ 成功连接到Qdrant云服务: {self.url}")
+                logger.warning(f"✅ 成功连接到Qdrant云服务: {self.url}")
             elif self.url:
                 # 使用自定义URL（无API密钥）
                 self.client = QdrantClient(
                     url=self.url,
                     timeout=self.timeout
                 )
-                logger.info(f"✅ 成功连接到Qdrant服务: {self.url}")
+                logger.warning(f"✅ 成功连接到Qdrant服务: {self.url}")
             else:
                 # 使用本地服务（默认）
                 self.client = QdrantClient(
@@ -156,19 +153,89 @@ class QdrantVectorStore:
                     port=6333,
                     timeout=self.timeout
                 )
-                logger.info("✅ 成功连接到本地Qdrant服务: localhost:6333")
+                logger.warning("✅ 成功连接到本地Qdrant服务: localhost:6333")
 
-            # # 检查连接
-            # collections = self.client.get_collections()
+            # 检查连接
+            collections = self.client.get_collections()
 
-            # # 创建或获取集合
-            # self._ensure_collection()
+            # 创建或获取集合
+            self._ensure_collection()
 
         except Exception as e:
             logger.error(f"❌ Qdrant连接失败: {e}")
             if not self.url:
-                logger.info("💡 本地连接失败，可以考虑使用Qdrant云服务")
-                logger.info("💡 或启动本地服务: docker run -p 6333:6333 qdrant/qdrant")
+                logger.warning("💡 本地连接失败，可以考虑使用Qdrant云服务")
+                logger.warning("💡 或启动本地服务: docker run -p 6333:6333 qdrant/qdrant")
             else:
-                logger.info("💡 请检查URL和API密钥是否正确")
+                logger.warning("💡 请检查URL和API密钥是否正确")
             raise
+
+    def _ensure_collection(self):
+        """确保集合存在，不存在则创建"""
+        try:
+            # 检查集合是否存在
+            collections = self.client.get_collections().collections
+            collection_names = [c.name for c in collections]
+
+            if self.collection_name not in collection_names:
+                # 创建新集合
+                hnsw_cfg = None
+                try:
+                    hnsw_cfg = models.HnswConfigDiff(m=self.hnsw_m, ef_construct=self.hnsw_ef_construct)
+                except Exception:
+                    hnsw_cfg = None
+                self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=VectorParams(
+                        size=self.vector_size,
+                        distance=self.distance
+                    ),
+                    hnsw_config=hnsw_cfg
+                )
+                logger.warning(f"✅ 创建Qdrant集合: {self.collection_name}")
+            else:
+                logger.warning(f"✅ 使用现有Qdrant集合: {self.collection_name}")
+                # 尝试更新 HNSW 配置
+                try:
+                    self.client.update_collection(
+                        collection_name=self.collection_name,
+                        hnsw_config=models.HnswConfigDiff(m=self.hnsw_m, ef_construct=self.hnsw_ef_construct)
+                    )
+                except Exception as ie:
+                    logger.warning(f"跳过更新HNSW配置: {ie}")
+            # 确保必要的payload索引
+            self._ensure_payload_indexes()
+
+        except Exception as e:
+            logger.error(f"❌ 集合初始化失败: {e}")
+            raise
+
+    def _ensure_payload_indexes(self):
+        """为常用过滤字段创建payload索引"""
+        try:
+            index_fields = [
+                ("memory_type", models.PayloadSchemaType.KEYWORD),
+                ("user_id", models.PayloadSchemaType.KEYWORD),
+                ("memory_id", models.PayloadSchemaType.KEYWORD),
+                ("timestamp", models.PayloadSchemaType.INTEGER),
+                ("modality", models.PayloadSchemaType.KEYWORD),  # 感知记忆模态筛选
+                ("source", models.PayloadSchemaType.KEYWORD),
+                ("external", models.PayloadSchemaType.BOOL),
+                ("namespace", models.PayloadSchemaType.KEYWORD),
+                # RAG相关字段索引
+                ("is_rag_data", models.PayloadSchemaType.BOOL),
+                ("rag_namespace", models.PayloadSchemaType.KEYWORD),
+                ("data_source", models.PayloadSchemaType.KEYWORD),
+            ]
+            for field_name, schema_type in index_fields:
+                try:
+                    self.client.create_payload_index(
+                        collection_name=self.collection_name,
+                        field_name=field_name,
+                        field_schema=schema_type,
+                    )
+                except Exception as ie:
+                    # 索引已存在会报错，忽略
+                    logger.warning(f"索引 {field_name} 已存在或创建失败: {ie}")
+        except Exception as e:
+            logger.warning(f"创建payload索引时出错: {e}")
