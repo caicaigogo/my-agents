@@ -5,9 +5,10 @@ Qdrant向量数据库存储实现
 
 import logging
 import os
+import uuid
 import threading
 from typing import Dict, List, Optional, Any, Union
-
+from datetime import datetime
 
 try:
     from qdrant_client import QdrantClient
@@ -239,3 +240,92 @@ class QdrantVectorStore:
                     logger.warning(f"索引 {field_name} 已存在或创建失败: {ie}")
         except Exception as e:
             logger.warning(f"创建payload索引时出错: {e}")
+
+    def add_vectors(
+        self,
+        vectors: List[List[float]],
+        metadata: List[Dict[str, Any]],
+        ids: Optional[List[str]] = None
+    ) -> bool:
+        """
+        添加向量到Qdrant
+
+        Args:
+            vectors: 向量列表
+            metadata: 元数据列表
+            ids: 可选的ID列表
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            if not vectors:
+                logger.warning("⚠️ 向量列表为空")
+                return False
+
+            # 生成ID（如果未提供）
+            if ids is None:
+                ids = [f"vec_{i}_{int(datetime.now().timestamp() * 1000000)}"
+                       for i in range(len(vectors))]
+
+            # 构建点数据
+            logger.warning(f"[Qdrant] add_vectors start: n_vectors={len(vectors)} n_meta={len(metadata)} collection={self.collection_name}")
+            points = []
+            for i, (vector, meta, point_id) in enumerate(zip(vectors, metadata, ids)):
+                # 确保向量是正确的维度
+                try:
+                    vlen = len(vector)
+                except Exception:
+                    logger.error(f"[Qdrant] 非法向量类型: index={i} type={type(vector)} value={vector}")
+                    continue
+                if vlen != self.vector_size:
+                    logger.warning(f"⚠️ 向量维度不匹配: 期望{self.vector_size}, 实际{len(vector)}")
+                    continue
+
+                # 添加时间戳到元数据
+                meta_with_timestamp = meta.copy()
+                meta_with_timestamp["timestamp"] = int(datetime.now().timestamp())
+                meta_with_timestamp["added_at"] = int(datetime.now().timestamp())
+                if "external" in meta_with_timestamp and not isinstance(meta_with_timestamp.get("external"), bool):
+                    # normalize to bool
+                    val = meta_with_timestamp.get("external")
+                    meta_with_timestamp["external"] = True if str(val).lower() in ("1", "true", "yes") else False
+                # 确保点ID是Qdrant接受的类型（无符号整数或UUID字符串）
+                safe_id: Any
+                if isinstance(point_id, int):
+                    safe_id = point_id
+                elif isinstance(point_id, str):
+                    try:
+                        uuid.UUID(point_id)
+                        safe_id = point_id
+                    except Exception:
+                        safe_id = str(uuid.uuid4())
+                else:
+                    safe_id = str(uuid.uuid4())
+
+                point = PointStruct(
+                    id=safe_id,
+                    vector=vector,
+                    payload=meta_with_timestamp
+                )
+                points.append(point)
+
+            if not points:
+                logger.warning("⚠️ 没有有效的向量点")
+                return False
+
+            # 批量插入
+            logger.warning(f"[Qdrant] upsert begin: points={len(points)}")
+            operation_info = self.client.upsert(
+                collection_name=self.collection_name,
+                points=points,
+                wait=True
+            )
+            logger.warning("[Qdrant] upsert done")
+
+            logger.warning(f"✅ 成功添加 {len(points)} 个向量到Qdrant")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ 添加向量失败: {e}")
+            return False
