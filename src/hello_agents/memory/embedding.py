@@ -37,7 +37,7 @@ class EmbeddingModel:
 class TFIDFEmbedding(EmbeddingModel):
     """TF-IDF 简易兜底（在无深度模型时保证可用）"""
 
-    def __init__(self, max_features: int = 1000):
+    def __init__(self, max_features: int = 1000, **kwargs):
         self.max_features = max_features
         self._vectorizer = None
         self._is_fitted = False

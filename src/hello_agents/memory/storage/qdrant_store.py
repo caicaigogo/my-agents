@@ -4,6 +4,7 @@ Qdrant向量数据库存储实现
 """
 
 import logging
+import os
 import threading
 from typing import Dict, List, Optional, Any, Union
 
@@ -99,3 +100,72 @@ class QdrantVectorStore:
         self.collection_name = collection_name
         self.vector_size = vector_size
         self.timeout = timeout
+        # HNSW/Query params via env
+        try:
+            self.hnsw_m = int(os.getenv("QDRANT_HNSW_M", "32"))
+        except Exception:
+            self.hnsw_m = 32
+        try:
+            self.hnsw_ef_construct = int(os.getenv("QDRANT_HNSW_EF_CONSTRUCT", "256"))
+        except Exception:
+            self.hnsw_ef_construct = 256
+        try:
+            self.search_ef = int(os.getenv("QDRANT_SEARCH_EF", "128"))
+        except Exception:
+            self.search_ef = 128
+        self.search_exact = os.getenv("QDRANT_SEARCH_EXACT", "0") == "1"
+
+        # 距离度量映射
+        distance_map = {
+            "cosine": Distance.COSINE,
+            "dot": Distance.DOT,
+            "euclidean": Distance.EUCLID,
+        }
+        self.distance = distance_map.get(distance.lower(), Distance.COSINE)
+
+        # 初始化客户端
+        self.client = None
+        self._initialize_client()
+
+    def _initialize_client(self):
+        """初始化Qdrant客户端和集合"""
+        try:
+            # 根据配置创建客户端连接
+            if self.url and self.api_key:
+                # 使用云服务API
+                self.client = QdrantClient(
+                    url=self.url,
+                    api_key=self.api_key,
+                    timeout=self.timeout
+                )
+                logger.info(f"✅ 成功连接到Qdrant云服务: {self.url}")
+            elif self.url:
+                # 使用自定义URL（无API密钥）
+                self.client = QdrantClient(
+                    url=self.url,
+                    timeout=self.timeout
+                )
+                logger.info(f"✅ 成功连接到Qdrant服务: {self.url}")
+            else:
+                # 使用本地服务（默认）
+                self.client = QdrantClient(
+                    host="localhost",
+                    port=6333,
+                    timeout=self.timeout
+                )
+                logger.info("✅ 成功连接到本地Qdrant服务: localhost:6333")
+
+            # # 检查连接
+            # collections = self.client.get_collections()
+
+            # # 创建或获取集合
+            # self._ensure_collection()
+
+        except Exception as e:
+            logger.error(f"❌ Qdrant连接失败: {e}")
+            if not self.url:
+                logger.info("💡 本地连接失败，可以考虑使用Qdrant云服务")
+                logger.info("💡 或启动本地服务: docker run -p 6333:6333 qdrant/qdrant")
+            else:
+                logger.info("💡 请检查URL和API密钥是否正确")
+            raise

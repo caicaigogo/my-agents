@@ -16,7 +16,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 from ..base import BaseMemory, MemoryItem, MemoryConfig
-from ..storage import SQLiteDocumentStore
+from ..storage import SQLiteDocumentStore, QdrantVectorStore
+from ..embedding import get_text_embedder, get_dimension
 
 
 class Episode:
@@ -70,6 +71,20 @@ class EpisodicMemory(BaseMemory):
         db_path = os.path.join(db_dir, "memory.db")
         self.doc_store = SQLiteDocumentStore(db_path=db_path)
 
+        # 统一嵌入模型（多语言，默认384维）
+        self.embedder = get_text_embedder()
+
+        # 向量存储（Qdrant - 使用连接管理器避免重复连接）
+        from ..storage.qdrant_store import QdrantConnectionManager
+        qdrant_url = os.getenv("QDRANT_URL")
+        qdrant_api_key = os.getenv("QDRANT_API_KEY")
+        self.vector_store = QdrantConnectionManager.get_instance(
+            url=qdrant_url,
+            api_key=qdrant_api_key,
+            collection_name=os.getenv("QDRANT_COLLECTION", "hello_agents_vectors"),
+            vector_size=get_dimension(getattr(self.embedder, 'dimension', 384)),
+            distance=os.getenv("QDRANT_DISTANCE", "cosine")
+        )
 
     def add(self, memory_item: MemoryItem) -> str:
         """添加情景记忆"""
@@ -113,6 +128,16 @@ class EpisodicMemory(BaseMemory):
                 "tags": tags
             }
         )
+
+        # 2) 向量索引（Qdrant）
+        try:
+            embedding = self.embedder.encode(memory_item.content)
+            if hasattr(embedding, "tolist"):
+                embedding = embedding.tolist()
+
+        except Exception:
+            # 向量入库失败不影响权威存储
+            pass
 
         return memory_item.id
 
