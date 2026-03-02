@@ -58,7 +58,17 @@ class TFIDFEmbedding(EmbeddingModel):
 
     def encode(self, texts: Union[str, List[str]]):
         if not self._is_fitted:
-            raise ValueError("TF-IDF模型未训练，请先调用fit()方法")
+            # raise ValueError("TF-IDF模型未训练，请先调用fit()方法")
+            print("TF-IDF模型未训练，请先调用fit()方法")
+            if isinstance(texts, str):
+                texts = texts.split()
+            # 如果基础词不够 1000 个，可以补充
+            while len(texts) < 1000:
+                texts.append(f"补充词{len(texts) + 1}")
+            self._vectorizer.fit(texts)
+            self._is_fitted = True
+            self._dimension = len(self._vectorizer.get_feature_names_out())
+
         if isinstance(texts, str):
             texts = [texts]
             single = True
