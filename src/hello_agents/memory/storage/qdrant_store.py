@@ -422,3 +422,138 @@ class QdrantVectorStore:
         except Exception as e:
             logger.error(f"❌ 向量搜索失败: {e}")
             return []
+
+    def delete_vectors(self, ids: List[str]) -> bool:
+        """
+        删除向量
+
+        Args:
+            ids: 要删除的向量ID列表
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            if not ids:
+                return True
+
+            operation_info = self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.PointIdsList(
+                    points=ids
+                ),
+                wait=True
+            )
+
+            logger.warning(f"✅ 成功删除 {len(ids)} 个向量")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ 删除向量失败: {e}")
+            return False
+
+    def clear_collection(self) -> bool:
+        """
+        清空集合
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            # 删除并重新创建集合
+            self.client.delete_collection(collection_name=self.collection_name)
+            self._ensure_collection()
+
+            logger.warning(f"✅ 成功清空Qdrant集合: {self.collection_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ 清空集合失败: {e}")
+            return False
+
+    def delete_memories(self, memory_ids: List[str]):
+        """
+        删除指定记忆（通过payload中的 memory_id 过滤删除）
+
+        注意：由于写入时可能将非UUID的点ID转换为UUID，这里不再依赖点ID，
+        而是通过payload中的memory_id来匹配删除，确保一致性。
+        """
+        try:
+            if not memory_ids:
+                return
+            # 构建 should 过滤条件：memory_id 等于任一给定值
+            conditions = [
+                FieldCondition(key="memory_id", match=MatchValue(value=mid))
+                for mid in memory_ids
+            ]
+            query_filter = Filter(should=conditions)
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(filter=query_filter),
+                wait=True,
+            )
+            logger.warning(f"✅ 成功按memory_id删除 {len(memory_ids)} 个Qdrant向量")
+        except Exception as e:
+            logger.error(f"❌ 删除记忆失败: {e}")
+            raise
+
+    def get_collection_info(self) -> Dict[str, Any]:
+        """
+        获取集合信息
+
+        Returns:
+            Dict: 集合信息
+        """
+        try:
+            collection_info = self.client.get_collection(self.collection_name)
+
+            info = {
+                "name": self.collection_name,
+                "vectors_count": collection_info.vectors_count,
+                "indexed_vectors_count": collection_info.indexed_vectors_count,
+                "points_count": collection_info.points_count,
+                "segments_count": collection_info.segments_count,
+                "config": {
+                    "vector_size": self.vector_size,
+                    "distance": self.distance.value,
+                }
+            }
+
+            return info
+
+        except Exception as e:
+            logger.error(f"❌ 获取集合信息失败: {e}")
+            return {}
+
+    def get_collection_stats(self) -> Dict[str, Any]:
+        """
+        获取集合统计信息（兼容抽象接口）
+        """
+        info = self.get_collection_info()
+        if not info:
+            return {"store_type": "qdrant", "name": self.collection_name}
+        info["store_type"] = "qdrant"
+        return info
+
+    def health_check(self) -> bool:
+        """
+        健康检查
+
+        Returns:
+            bool: 服务是否健康
+        """
+        try:
+            # 尝试获取集合列表
+            collections = self.client.get_collections()
+            return True
+        except Exception as e:
+            logger.error(f"❌ Qdrant健康检查失败: {e}")
+            return False
+
+    def __del__(self):
+        """析构函数，清理资源"""
+        if hasattr(self, 'client') and self.client:
+            try:
+                self.client.close()
+            except:
+                pass

@@ -10,8 +10,6 @@
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import os
-# import math
-# import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -195,7 +193,59 @@ class EpisodicMemory(BaseMemory):
         now_ts = int(datetime.now().timestamp())
         results: List[Tuple[float, MemoryItem]] = []
         seen = set()
+        for hit in hits:
+            meta = hit.get("metadata", {})
+            mem_id = meta.get("memory_id")
+            if not mem_id or mem_id in seen:
+                continue
 
+            # 检查是否已遗忘
+            episode = next((e for e in self.episodes if e.episode_id == mem_id), None)
+            if episode and episode.context.get("forgotten", False):
+                continue  # 跳过已遗忘的记忆
+
+            if candidate_ids is not None and mem_id not in candidate_ids:
+                continue
+            if session_id and meta.get("session_id") != session_id:
+                continue
+
+            # 从权威库读取完整记录
+            doc = self.doc_store.get_memory(mem_id)
+            if not doc:
+                continue
+
+            # 计算综合分数：向量0.6 + 近因0.2 + 重要性0.2
+            vec_score = float(hit.get("score", 0.0))
+            age_days = max(0.0, (now_ts - int(doc["timestamp"])) / 86400.0)
+            recency_score = 1.0 / (1.0 + age_days)
+            imp = float(doc.get("importance", 0.5))
+
+            # 新评分算法：向量检索纯基于相似度，重要性作为加权因子
+            # 基础相似度得分（不受重要性影响）
+            base_relevance = vec_score * 0.8 + recency_score * 0.2
+
+            # 重要性作为乘法加权因子，范围 [0.8, 1.2]
+            importance_weight = 0.8 + (imp * 0.4)
+
+            # 最终得分：相似度 * 重要性权重
+            combined = base_relevance * importance_weight
+
+            item = MemoryItem(
+                id=doc["memory_id"],
+                content=doc["content"],
+                memory_type=doc["memory_type"],
+                user_id=doc["user_id"],
+                timestamp=datetime.fromtimestamp(doc["timestamp"]),
+                importance=doc.get("importance", 0.5),
+                metadata={
+                    **doc.get("properties", {}),
+                    "relevance_score": combined,
+                    "vector_score": vec_score,
+                    "recency_score": recency_score
+                }
+            )
+            results.append((combined, item))
+            seen.add(mem_id)
 
         # 若向量检索无结果，回退到简单关键词匹配（内存缓存）
         if not results:
@@ -301,6 +351,11 @@ class EpisodicMemory(BaseMemory):
         # 权威库删除
         doc_deleted = self.doc_store.delete_memory(memory_id)
 
+        # 向量库删除
+        try:
+            self.vector_store.delete_memories([memory_id])
+        except Exception:
+            pass
 
         return removed or doc_deleted
 
@@ -320,6 +375,13 @@ class EpisodicMemory(BaseMemory):
         ids = [d["memory_id"] for d in docs]
         for mid in ids:
             self.doc_store.delete_memory(mid)
+
+        # Qdrant按ID删除对应向量
+        try:
+            if ids:
+                self.vector_store.delete_memories(ids)
+        except Exception:
+            pass
 
     def forget(self, strategy: str = "importance_based", threshold: float = 0.1, max_age_days: int = 30) -> int:
         """情景记忆遗忘机制（硬删除）"""
@@ -381,7 +443,10 @@ class EpisodicMemory(BaseMemory):
         active_episodes = self.episodes
 
         db_stats = self.doc_store.get_database_stats()
-
+        try:
+            vs_stats = self.vector_store.get_collection_stats()
+        except Exception:
+            vs_stats = {"store_type": "qdrant"}
         return {
             "count": len(active_episodes),  # 活跃记忆数量
             "forgotten_count": 0,  # 硬删除模式下已遗忘的记忆会被直接删除
@@ -390,7 +455,7 @@ class EpisodicMemory(BaseMemory):
             "avg_importance": sum(e.importance for e in active_episodes) / len(active_episodes) if active_episodes else 0.0,
             "time_span_days": self._calculate_time_span(),
             "memory_type": "episodic",
-            # "vector_store": vs_stats,
+            "vector_store": vs_stats,
             "document_store": {k: v for k, v in db_stats.items() if k.endswith("_count") or k in ["store_type", "db_path"]}
         }
 
