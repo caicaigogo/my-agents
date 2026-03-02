@@ -7,7 +7,7 @@ import logging
 import os
 import uuid
 import threading
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 try:
@@ -15,7 +15,7 @@ try:
     from qdrant_client.http import models
     from qdrant_client.http.models import (
         Distance, VectorParams, PointStruct,
-        Filter, FieldCondition, MatchValue, SearchRequest
+        Filter, FieldCondition, MatchValue
     )
     QDRANT_AVAILABLE = True
 except ImportError:
@@ -329,3 +329,96 @@ class QdrantVectorStore:
         except Exception as e:
             logger.error(f"❌ 添加向量失败: {e}")
             return False
+
+    def search_similar(
+        self,
+        query_vector: List[float],
+        limit: int = 10,
+        score_threshold: Optional[float] = None,
+        where: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        搜索相似向量
+
+        Args:
+            query_vector: 查询向量
+            limit: 返回结果数量限制
+            score_threshold: 相似度阈值
+            where: 过滤条件
+
+        Returns:
+            List[Dict]: 搜索结果
+        """
+        try:
+            if len(query_vector) != self.vector_size:
+                logger.error(f"❌ 查询向量维度错误: 期望{self.vector_size}, 实际{len(query_vector)}")
+                return []
+
+            # 构建过滤器
+            query_filter = None
+            if where:
+                conditions = []
+                for key, value in where.items():
+                    if isinstance(value, (str, int, float, bool)):
+                        conditions.append(
+                            FieldCondition(
+                                key=key,
+                                match=MatchValue(value=value)
+                            )
+                        )
+
+                if conditions:
+                    query_filter = Filter(must=conditions)
+
+            # 执行搜索
+            # 搜索参数
+            search_params = None
+            try:
+                search_params = models.SearchParams(hnsw_ef=self.search_ef, exact=self.search_exact)
+            except Exception:
+                search_params = None
+
+            # 兼容新旧 qdrant-client API
+            # 1.16.0+ 使用 query_points(), <1.16.0 使用 search()
+            try:
+                # 尝试新API (qdrant-client >= 1.16.0)
+                response = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=query_vector,
+                    query_filter=query_filter,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    with_payload=True,
+                    with_vectors=False,
+                    search_params=search_params
+                )
+                search_result = response.points
+            except AttributeError:
+                # 回退到旧API (qdrant-client < 1.16.0)
+                search_result = self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_vector,
+                    query_filter=query_filter,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    with_payload=True,
+                    with_vectors=False,
+                    search_params=search_params
+                )
+
+            # 转换结果格式
+            results = []
+            for hit in search_result:
+                result = {
+                    "id": hit.id,
+                    "score": hit.score,
+                    "metadata": hit.payload or {}
+                }
+                results.append(result)
+
+            logger.warning(f"🔍 Qdrant搜索返回 {len(results)} 个结果")
+            return results
+
+        except Exception as e:
+            logger.error(f"❌ 向量搜索失败: {e}")
+            return []

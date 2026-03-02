@@ -10,7 +10,8 @@
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import os
-
+# import math
+# import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -173,6 +174,22 @@ class EpisodicMemory(BaseMemory):
                 limit=1000
             )
             candidate_ids = {d["memory_id"] for d in docs}
+
+        # 向量检索（Qdrant）
+        try:
+            query_vec = self.embedder.encode(query)
+            if hasattr(query_vec, "tolist"):
+                query_vec = query_vec.tolist()
+            where = {"memory_type": "episodic"}
+            if user_id:
+                where["user_id"] = user_id
+            hits = self.vector_store.search_similar(
+                query_vector=query_vec,
+                limit=max(limit * 5, 20),
+                where=where
+            )
+        except Exception:
+            hits = []
 
         # 过滤与重排
         now_ts = int(datetime.now().timestamp())
