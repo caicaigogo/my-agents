@@ -1,5 +1,7 @@
 import unittest
-from hello_agents.memory.embedding import TFIDFEmbedding
+from dotenv import load_dotenv
+import os
+from hello_agents.memory.embedding import TFIDFEmbedding, DashScopeEmbedding
 
 
 class TestTFIDFEmbedding(unittest.TestCase):
@@ -31,3 +33,26 @@ class TestTFIDFEmbedding(unittest.TestCase):
 
         # <class 'list'>
         print(type(encode_result.tolist()))
+
+
+class TestDashScopeEmbedding(unittest.TestCase):
+
+    def setUp(self):
+        load_dotenv()
+        api_key = os.environ['jina_API_KEY']
+        base_url = 'https://api.jina.ai/v1'
+        self.embedder = DashScopeEmbedding(
+            model_name='jina-embeddings-v5-text-small', base_url=base_url, api_key=api_key
+        )
+
+    def test_encode(self):
+
+        texts = ["Organic skincare for sensitive skin with aloe vera and chamomile: Imagine the soothing embrace of nature with our organic skincare range, crafted specifically for sensitive skin. Infused with the calming properties of aloe vera and chamomile, each product provides gentle nourishment and protection. Say goodbye to irritation and hello to a glowing, healthy complexion."]
+        encode_result = self.embedder.encode(texts)
+
+        # [array([0.02411918, 0.01061533, -0.04448329, ..., -0.04101706,
+        #         0.05199345, 0.03004066], shape=(1024,))]
+        print(encode_result)
+
+        # 1024
+        print(self.embedder.dimension)
