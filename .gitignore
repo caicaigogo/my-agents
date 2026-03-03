@@ -4,3 +4,5 @@ venv
 **/__pycache__
 *.egg-info
 */**/*.db
+*/**/*.DS_Store
+.DS_Store
