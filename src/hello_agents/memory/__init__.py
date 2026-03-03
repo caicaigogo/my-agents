@@ -13,7 +13,7 @@ from .manager import MemoryManager
 # Memory Types Layer (记忆类型层)
 from .types.working import WorkingMemory
 from .types.episodic import EpisodicMemory
-
+from .types.semantic import SemanticMemory
 
 # Storage Layer (存储层)
 from .storage.document_store import DocumentStore, SQLiteDocumentStore
@@ -28,6 +28,7 @@ __all__ = [
     # Memory Types
     "WorkingMemory",
     "EpisodicMemory",
+    "SemanticMemory",
 
     # Storage Layer
     "DocumentStore",

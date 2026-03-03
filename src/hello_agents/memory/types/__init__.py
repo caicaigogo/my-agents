@@ -9,13 +9,16 @@
 
 from .working import WorkingMemory
 from .episodic import EpisodicMemory, Episode
-
+from .semantic import SemanticMemory, Entity, Relation
 
 __all__ = [
     # 记忆类型
     "WorkingMemory",
-    "EpisodicMemory",   
+    "EpisodicMemory",
+    "SemanticMemory",
 
     # 辅助类
     "Episode",
+    "Entity",
+    "Relation",
 ]
