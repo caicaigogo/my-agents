@@ -71,7 +71,27 @@ class Neo4jGraphStore:
                 **config
             )
 
+            # 验证连接
+            self.driver.verify_connectivity()
+
+            # 检查是否是云服务
+            if "neo4j.io" in self.uri or "aura" in self.uri.lower():
+                logger.info(f"✅ 成功连接到Neo4j云服务: {self.uri}")
+            else:
+                logger.info(f"✅ 成功连接到Neo4j服务: {self.uri}")
+
+        except AuthError as e:
+            logger.error(f"❌ Neo4j认证失败: {e}")
+            logger.info("💡 请检查用户名和密码是否正确")
+            raise
+        except ServiceUnavailable as e:
+            logger.error(f"❌ Neo4j服务不可用: {e}")
+            if "localhost" in self.uri:
+                logger.info("💡 本地连接失败，可以考虑使用Neo4j Aura云服务")
+                logger.info("💡 或启动本地服务: docker run -p 7474:7474 -p 7687:7687 neo4j:5.14")
+            else:
+                logger.info("💡 请检查URL和网络连接")
+            raise
         except Exception as e:
             logger.error(f"❌ Neo4j连接失败: {e}")
             raise
-
