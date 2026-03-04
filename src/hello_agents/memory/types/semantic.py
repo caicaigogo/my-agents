@@ -270,6 +270,311 @@ class SemanticMemory(BaseMemory):
             logger.error(f"❌ 添加语义记忆失败: {e}")
             raise
 
+    def retrieve(self, query: str, limit: int = 5, **kwargs) -> List[MemoryItem]:
+        """检索语义记忆"""
+        try:
+            user_id = kwargs.get("user_id")
+
+            # 1. 向量检索
+            vector_results = self._vector_search(query, limit * 2, user_id)
+
+            # 2. 图检索
+            graph_results = self._graph_search(query, limit * 2, user_id)
+
+            # 3. 混合排序
+            combined_results = self._combine_and_rank_results(
+                vector_results, graph_results, query, limit
+            )
+
+            # 3.1 计算概率（对 combined_score 做 softmax 归一化）
+            scores = [r.get("combined_score", r.get("vector_score", 0.0)) for r in combined_results]
+            if scores:
+                import math
+                max_s = max(scores)
+                exps = [math.exp(s - max_s) for s in scores]
+                denom = sum(exps) or 1.0
+                probs = [e / denom for e in exps]
+            else:
+                probs = []
+
+            # 4. 过滤已遗忘记忆并转换为MemoryItem
+            result_memories = []
+            for idx, result in enumerate(combined_results):
+                memory_id = result.get("memory_id")
+
+                # 检查是否已遗忘
+                memory = next((m for m in self.semantic_memories if m.id == memory_id), None)
+                if memory and memory.metadata.get("forgotten", False):
+                    continue  # 跳过已遗忘的记忆
+
+                # 处理时间戳
+                timestamp = result.get("timestamp")
+                if isinstance(timestamp, str):
+                    try:
+                        timestamp = datetime.fromisoformat(timestamp)
+                    except ValueError:
+                        timestamp = datetime.now()
+                elif isinstance(timestamp, (int, float)):
+                    timestamp = datetime.fromtimestamp(timestamp)
+                else:
+                    timestamp = datetime.now()
+
+                # 直接从结果数据构建MemoryItem（附带分数与概率）
+                memory_item = MemoryItem(
+                    id=result["memory_id"],
+                    content=result["content"],
+                    memory_type="semantic",
+                    user_id=result.get("user_id", "default"),
+                    timestamp=timestamp,
+                    importance=result.get("importance", 0.5),
+                    metadata={
+                        **result.get("metadata", {}),
+                        "combined_score": result.get("combined_score", 0.0),
+                        "vector_score": result.get("vector_score", 0.0),
+                        "graph_score": result.get("graph_score", 0.0),
+                        "probability": probs[idx] if idx < len(probs) else 0.0,
+                    }
+                )
+                result_memories.append(memory_item)
+
+            logger.warning(f"✅ 检索到 {len(result_memories)} 条相关记忆")
+            return result_memories[:limit]
+
+        except Exception as e:
+            logger.error(f"❌ 检索语义记忆失败: {e}")
+            return []
+
+    def _vector_search(self, query: str, limit: int, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Qdrant向量搜索"""
+        try:
+            # 生成查询向量
+            query_embedding = self.embedding_model.encode(query)
+
+            # 构建过滤条件
+            where_filter = {"memory_type": "semantic"}
+            if user_id:
+                where_filter["user_id"] = user_id
+
+            # Qdrant向量检索
+            results = self.vector_store.search_similar(
+                query_vector=query_embedding.tolist(),
+                limit=limit,
+                where=where_filter if where_filter else None
+            )
+
+            # 转换结果格式以保持兼容性
+            formatted_results = []
+            for result in results:
+                formatted_result = {
+                    "id": result["id"],
+                    "score": result["score"],
+                    **result["metadata"]  # 包含所有元数据
+                }
+                formatted_results.append(formatted_result)
+
+            logger.warning(f"🔍 Qdrant向量搜索返回 {len(formatted_results)} 个结果")
+            return formatted_results
+
+        except Exception as e:
+            logger.error(f"❌ Qdrant向量搜索失败: {e}")
+            return []
+
+    def _graph_search(self, query: str, limit: int, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Neo4j图搜索"""
+        try:
+            # 从查询中提取实体
+            query_entities = self._extract_entities(query)
+
+            if not query_entities:
+                # 如果没有提取到实体，尝试按名称搜索
+                entities_by_name = self.graph_store.search_entities_by_name(
+                    name_pattern=query,
+                    limit=10
+                )
+                if entities_by_name:
+                    query_entities = [Entity(
+                        entity_id=e["id"],
+                        name=e["name"],
+                        entity_type=e["type"]
+                    ) for e in entities_by_name[:3]]
+                else:
+                    return []
+
+            # 在Neo4j图中查找相关实体和记忆
+            related_memory_ids = set()
+
+            for entity in query_entities:
+                try:
+                    # 查找相关实体
+                    related_entities = self.graph_store.find_related_entities(
+                        entity_id=entity.entity_id,
+                        max_depth=2,
+                        limit=20
+                    )
+
+                    # 收集相关记忆ID
+                    for rel_entity in related_entities:
+                        if "memory_id" in rel_entity:
+                            related_memory_ids.add(rel_entity["memory_id"])
+
+                    # 也添加直接匹配的实体记忆
+                    entity_rels = self.graph_store.get_entity_relationships(entity.entity_id)
+                    for rel in entity_rels:
+                        rel_data = rel.get("relationship", {})
+                        if "memory_id" in rel_data:
+                            related_memory_ids.add(rel_data["memory_id"])
+
+                except Exception as e:
+                    logger.warning(f"图搜索实体 {entity.entity_id} 失败: {e}")
+                    continue
+
+            # 构建结果 - 从向量数据库获取完整记忆信息
+            results = []
+            for memory_id in list(related_memory_ids)[:limit * 2]:  # 获取更多候选
+                try:
+                    # 优先从本地缓存获取记忆详情，避免占位向量维度不一致问题
+                    mem = self._find_memory_by_id(memory_id)
+                    if not mem:
+                        continue
+
+                    if user_id and mem.user_id != user_id:
+                        continue
+
+                    metadata = {
+                        "content": mem.content,
+                        "user_id": mem.user_id,
+                        "memory_type": mem.memory_type,
+                        "importance": mem.importance,
+                        "timestamp": int(mem.timestamp.timestamp()),
+                        "entities": mem.metadata.get("entities", [])
+                    }
+
+                    # 计算图相关性分数
+                    graph_score = self._calculate_graph_relevance_neo4j(metadata, query_entities)
+
+                    results.append({
+                        "id": memory_id,
+                        "memory_id": memory_id,
+                        "content": metadata.get("content", ""),
+                        "similarity": graph_score,
+                        "user_id": metadata.get("user_id"),
+                        "memory_type": metadata.get("memory_type"),
+                        "importance": metadata.get("importance", 0.5),
+                        "timestamp": metadata.get("timestamp"),
+                        "entities": metadata.get("entities", [])
+                    })
+
+                except Exception as e:
+                    logger.warning(f"获取记忆 {memory_id} 详情失败: {e}")
+                    continue
+
+            # 按图相关性排序
+            results.sort(key=lambda x: x["similarity"], reverse=True)
+            logger.warning(f"🕸️ Neo4j图搜索返回 {len(results)} 个结果")
+            return results[:limit]
+
+        except Exception as e:
+            logger.error(f"❌ Neo4j图搜索失败: {e}")
+            return []
+
+    def _combine_and_rank_results(
+        self,
+        vector_results: List[Dict[str, Any]],
+        graph_results: List[Dict[str, Any]],
+        query: str,
+        limit: int
+    ) -> List[Dict[str, Any]]:
+        """混合排序结果 - 仅基于向量与图分数的简单融合"""
+        # 合并结果，按内容去重
+        combined = {}
+        content_seen = set()  # 用于内容去重
+
+        # 添加向量结果
+        for result in vector_results:
+            memory_id = result["memory_id"]
+            content = result.get("content", "")
+
+            # 内容去重：检查是否已经有相同或高度相似的内容
+            content_hash = hash(content.strip())
+            if content_hash in content_seen:
+                logger.warning(f"⚠️ 跳过重复内容: {content[:30]}...")
+                continue
+
+            content_seen.add(content_hash)
+            combined[memory_id] = {
+                **result,
+                "vector_score": result.get("score", 0.0),
+                "graph_score": 0.0,
+                "content_hash": content_hash
+            }
+
+        # 添加图结果
+        for result in graph_results:
+            memory_id = result["memory_id"]
+            content = result.get("content", "")
+            content_hash = hash(content.strip())
+
+            if memory_id in combined:
+                combined[memory_id]["graph_score"] = result.get("similarity", 0.0)
+            elif content_hash not in content_seen:
+                content_seen.add(content_hash)
+                combined[memory_id] = {
+                    **result,
+                    "vector_score": 0.0,
+                    "graph_score": result.get("similarity", 0.0),
+                    "content_hash": content_hash
+                }
+
+        # 计算混合分数：相似度为主，重要性为辅助排序因子
+        for memory_id, result in combined.items():
+            vector_score = result["vector_score"]
+            graph_score = result["graph_score"]
+            importance = result.get("importance", 0.5)
+
+            # 新评分算法：向量检索纯基于相似度，重要性作为加权因子
+            # 基础相似度得分（不受重要性影响）
+            base_relevance = vector_score * 0.7 + graph_score * 0.3
+
+            # 重要性作为乘法加权因子，范围 [0.8, 1.2]
+            # importance in [0,1] -> weight in [0.8,1.2]
+            importance_weight = 0.8 + (importance * 0.4)
+
+            # 最终得分：相似度 * 重要性权重
+            combined_score = base_relevance * importance_weight
+
+            # 调试信息：查看分数分解
+            result["debug_info"] = {
+                "base_relevance": base_relevance,
+                "importance_weight": importance_weight,
+                "combined_score": combined_score
+            }
+
+            result["combined_score"] = combined_score
+
+        # 应用最小相关性阈值
+        min_threshold = 0.1  # 最小相关性阈值
+        filtered_results = [
+            result for result in combined.values()
+            if result["combined_score"] >= min_threshold
+        ]
+
+        # 排序并返回
+        sorted_results = sorted(
+            filtered_results,
+            key=lambda x: x["combined_score"],
+            reverse=True
+        )
+
+        # 调试信息
+        logger.warning(f"🔍 向量结果: {len(vector_results)}, 图结果: {len(graph_results)}")
+        logger.warning(f"📝 去重后: {len(combined)}, 过滤后: {len(filtered_results)}")
+
+        if logger.level <= logging.DEBUG:
+            for i, result in enumerate(sorted_results[:3]):
+                logger.warning(f"  结果{i+1}: 向量={result['vector_score']:.3f}, 图={result['graph_score']:.3f}, 精确={result.get('exact_match_bonus', 0):.3f}, 关键词={result.get('keyword_bonus', 0):.3f}, 公司={result.get('company_bonus', 0):.3f}, 实体={result.get('entity_type_bonus', 0):.3f}, 综合={result['combined_score']:.3f}")
+
+        return sorted_results[:limit]
+
     def _detect_language(self, text: str) -> str:
         """简单的语言检测"""
         # 统计中文字符比例（无正则，逐字符判断范围）
@@ -501,3 +806,46 @@ class SemanticMemory(BaseMemory):
         except Exception as e:
             logger.error(f"❌ 添加关系到图数据库失败: {e}")
             return False
+
+    def _calculate_graph_relevance_neo4j(self, memory_metadata: Dict[str, Any], query_entities: List[Entity]) -> float:
+        """计算Neo4j图相关性分数"""
+        try:
+            memory_entities = memory_metadata.get("entities", [])
+            if not memory_entities or not query_entities:
+                return 0.0
+
+            # 实体匹配度
+            query_entity_ids = {e.entity_id for e in query_entities}
+            matching_entities = len(set(memory_entities).intersection(query_entity_ids))
+            entity_score = matching_entities / len(query_entity_ids) if query_entity_ids else 0
+
+            # 实体数量加权
+            entity_count = memory_metadata.get("entity_count", 0)
+            entity_density = min(entity_count / 10, 1.0)  # 归一化到[0,1]
+
+            # 关系数量加权
+            relation_count = memory_metadata.get("relation_count", 0)
+            relation_density = min(relation_count / 5, 1.0)  # 归一化到[0,1]
+
+            # 综合分数
+            relevance_score = (
+                entity_score * 0.6 +           # 实体匹配权重60%
+                entity_density * 0.2 +         # 实体密度权重20%
+                relation_density * 0.2         # 关系密度权重20%
+            )
+
+            return min(relevance_score, 1.0)
+
+        except Exception as e:
+            logger.warning(f"计算图相关性失败: {e}")
+            return 0.0
+
+    def _find_memory_by_id(self, memory_id: str) -> Optional[MemoryItem]:
+        """根据ID查找记忆"""
+        logger.warning(f"🔍 查找记忆ID: {memory_id}, 当前记忆数: {len(self.semantic_memories)}")
+        for memory in self.semantic_memories:
+            if memory.id == memory_id:
+                logger.warning(f"✅ 找到记忆: {memory.content[:50]}...")
+                return memory
+        logger.warning(f"❌ 未找到记忆ID: {memory_id}")
+        return None

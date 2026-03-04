@@ -215,6 +215,142 @@ class Neo4jGraphStore:
             logger.error(f"❌ 添加关系失败: {e}")
             return False
 
+    def find_related_entities(
+        self,
+        entity_id: str,
+        relationship_types: List[str] = None,
+        max_depth: int = 2,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        查找相关实体
+
+        Args:
+            entity_id: 起始实体ID
+            relationship_types: 关系类型过滤
+            max_depth: 最大搜索深度
+            limit: 结果限制
+
+        Returns:
+            List[Dict]: 相关实体列表
+        """
+        try:
+            # 构建关系类型过滤
+            rel_filter = ""
+            if relationship_types:
+                rel_types = "|".join(relationship_types)
+                rel_filter = f":{rel_types}"
+
+            query = f"""
+            MATCH path = (start:Entity {{id: $entity_id}})-[r{rel_filter}*1..{max_depth}]-(related:Entity)
+            WHERE start.id <> related.id
+            RETURN DISTINCT related,
+                   length(path) as distance,
+                   [rel in relationships(path) | type(rel)] as relationship_path
+            ORDER BY distance, related.name
+            LIMIT $limit
+            """
+
+            with self.driver.session(database=self.database) as session:
+                result = session.run(query, entity_id=entity_id, limit=limit)
+
+                entities = []
+                for record in result:
+                    entity_data = dict(record["related"])
+                    entity_data["distance"] = record["distance"]
+                    entity_data["relationship_path"] = record["relationship_path"]
+                    entities.append(entity_data)
+
+                logger.warning(f"🔍 找到 {len(entities)} 个相关实体")
+                return entities
+
+        except Exception as e:
+            logger.error(f"❌ 查找相关实体失败: {e}")
+            return []
+
+    def search_entities_by_name(self, name_pattern: str, entity_types: List[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        按名称搜索实体
+
+        Args:
+            name_pattern: 名称模式 (支持部分匹配)
+            entity_types: 实体类型过滤
+            limit: 结果限制
+
+        Returns:
+            List[Dict]: 匹配的实体列表
+        """
+        try:
+            # 构建类型过滤
+            type_filter = ""
+            params = {"pattern": f".*{name_pattern}.*", "limit": limit}
+
+            if entity_types:
+                type_filter = "AND e.type IN $types"
+                params["types"] = entity_types
+
+            query = f"""
+            MATCH (e:Entity)
+            WHERE e.name =~ $pattern {type_filter}
+            RETURN e
+            ORDER BY e.name
+            LIMIT $limit
+            """
+
+            with self.driver.session(database=self.database) as session:
+                result = session.run(query, **params)
+
+                entities = []
+                for record in result:
+                    entity_data = dict(record["e"])
+                    entities.append(entity_data)
+
+                logger.warning(f"🔍 按名称搜索到 {len(entities)} 个实体")
+                return entities
+
+        except Exception as e:
+            logger.error(f"❌ 按名称搜索实体失败: {e}")
+            return []
+
+    def get_entity_relationships(self, entity_id: str) -> List[Dict[str, Any]]:
+        """
+        获取实体的所有关系
+
+        Args:
+            entity_id: 实体ID
+
+        Returns:
+            List[Dict]: 关系列表
+        """
+        try:
+            query = """
+            MATCH (e:Entity {id: $entity_id})-[r]-(other:Entity)
+            RETURN r, other,
+                   CASE WHEN startNode(r).id = $entity_id THEN 'outgoing' ELSE 'incoming' END as direction
+            """
+
+            with self.driver.session(database=self.database) as session:
+                result = session.run(query, entity_id=entity_id)
+
+                relationships = []
+                for record in result:
+                    rel_data = dict(record["r"])
+                    other_data = dict(record["other"])
+
+                    relationship = {
+                        "relationship": rel_data,
+                        "other_entity": other_data,
+                        "direction": record["direction"]
+                    }
+                    relationships.append(relationship)
+
+                return relationships
+
+        except Exception as e:
+            logger.error(f"❌ 获取实体关系失败: {e}")
+            return []
+
+
     def health_check(self) -> bool:
         """
         健康检查
