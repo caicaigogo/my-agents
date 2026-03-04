@@ -119,7 +119,7 @@ class SemanticMemory(BaseMemory):
         self.semantic_memories: List[MemoryItem] = []
         self.memory_embeddings: Dict[str, np.ndarray] = {}
 
-        logger.info("增强语义记忆初始化完成（使用Qdrant+Neo4j专业数据库）")
+        logger.warning("增强语义记忆初始化完成（使用Qdrant+Neo4j专业数据库）")
 
     def _init_embedding_model(self):
         """初始化统一嵌入模型（由 embedding_provider 管理）。"""
@@ -129,9 +129,9 @@ class SemanticMemory(BaseMemory):
             try:
                 test_vec = self.embedding_model.encode("health_check")
                 dim = getattr(self.embedding_model, "dimension", len(test_vec))
-                logger.info(f"✅ 嵌入模型就绪，维度: {dim}")
+                logger.warning(f"✅ 嵌入模型就绪，维度: {dim}")
             except Exception:
-                logger.info("✅ 嵌入模型就绪")
+                logger.warning("✅ 嵌入模型就绪")
         except Exception as e:
             logger.error(f"❌ 嵌入模型初始化失败: {e}")
             raise
@@ -148,13 +148,13 @@ class SemanticMemory(BaseMemory):
             qdrant_config = db_config.get_qdrant_config() or {}
             qdrant_config["vector_size"] = get_dimension()
             self.vector_store = QdrantConnectionManager.get_instance(**qdrant_config)
-            logger.info("✅ Qdrant向量数据库初始化完成")
+            logger.warning("✅ Qdrant向量数据库初始化完成")
 
             # 初始化Neo4j图数据库
             from ..storage.neo4j_store import Neo4jGraphStore
             neo4j_config = db_config.get_neo4j_config()
             self.graph_store = Neo4jGraphStore(**neo4j_config)
-            logger.info("✅ Neo4j图数据库初始化完成")
+            logger.warning("✅ Neo4j图数据库初始化完成")
 
             # 验证连接
             vector_health = self.vector_store.health_check()
@@ -165,12 +165,12 @@ class SemanticMemory(BaseMemory):
             if not graph_health:
                 logger.warning("⚠️ Neo4j连接异常，图搜索功能可能受限")
 
-            logger.info(f"🏥 数据库健康状态: Qdrant={'✅' if vector_health else '❌'}, Neo4j={'✅' if graph_health else '❌'}")
+            logger.warning(f"🏥 数据库健康状态: Qdrant={'✅' if vector_health else '❌'}, Neo4j={'✅' if graph_health else '❌'}")
 
         except Exception as e:
             logger.error(f"❌ 数据库初始化失败: {e}")
-            logger.info("💡 请检查数据库配置和网络连接")
-            logger.info("💡 参考 DATABASE_SETUP_GUIDE.md 进行配置")
+            logger.warning("💡 请检查数据库配置和网络连接")
+            logger.warning("💡 参考 DATABASE_SETUP_GUIDE.md 进行配置")
             raise
 
     def _init_nlp(self):
@@ -191,25 +191,97 @@ class SemanticMemory(BaseMemory):
                     nlp = spacy.load(model_name)
                     self.nlp_models[model_name] = nlp
                     loaded_models.append(lang_name)
-                    logger.info(f"✅ 加载{lang_name}spaCy模型: {model_name}")
+                    logger.warning(f"✅ 加载{lang_name}spaCy模型: {model_name}")
                 except OSError:
                     logger.warning(f"⚠️ {lang_name}spaCy模型不可用: {model_name}")
 
             # 设置主要NLP处理器
             if "zh_core_web_sm" in self.nlp_models:
                 self.nlp = self.nlp_models["zh_core_web_sm"]
-                logger.info("🎯 主要使用中文spaCy模型")
+                logger.warning("🎯 主要使用中文spaCy模型")
             elif "en_core_web_sm" in self.nlp_models:
                 self.nlp = self.nlp_models["en_core_web_sm"]
-                logger.info("🎯 主要使用英文spaCy模型")
+                logger.warning("🎯 主要使用英文spaCy模型")
             else:
                 self.nlp = None
                 logger.warning("⚠️ 无可用spaCy模型，实体提取将受限")
 
             if loaded_models:
-                logger.info(f"📚 可用语言模型: {', '.join(loaded_models)}")
+                logger.warning(f"📚 可用语言模型: {', '.join(loaded_models)}")
 
         except ImportError:
             logger.warning("⚠️ spaCy不可用，实体提取将受限")
             self.nlp = None
             self.nlp_models = {}
+
+    def add(self, memory_item: MemoryItem) -> str:
+        """添加语义记忆"""
+        try:
+            # 1. 生成文本嵌入
+            embedding = self.embedding_model.encode(memory_item.content)
+            self.memory_embeddings[memory_item.id] = embedding
+
+            # 2. 提取实体和关系
+            entities = self._extract_entities(memory_item.content)
+
+            return memory_item.id
+
+        except Exception as e:
+            logger.error(f"❌ 添加语义记忆失败: {e}")
+            raise
+
+
+    def _detect_language(self, text: str) -> str:
+        """简单的语言检测"""
+        # 统计中文字符比例（无正则，逐字符判断范围）
+        chinese_chars = sum(1 for ch in text if '\u4e00' <= ch <= '\u9fff')
+        total_chars = len(text.replace(' ', ''))
+
+        if total_chars == 0:
+            return "en"
+
+        chinese_ratio = chinese_chars / total_chars
+        return "zh" if chinese_ratio > 0.3 else "en"
+
+    def _extract_entities(self, text: str) -> List[Entity]:
+        """智能多语言实体提取"""
+        entities = []
+
+        # 检测文本语言
+        lang = self._detect_language(text)
+
+        # 选择合适的spaCy模型
+        selected_nlp = None
+        if lang == "zh" and "zh_core_web_sm" in self.nlp_models:
+            selected_nlp = self.nlp_models["zh_core_web_sm"]
+        elif lang == "en" and "en_core_web_sm" in self.nlp_models:
+            selected_nlp = self.nlp_models["en_core_web_sm"]
+        else:
+            # 使用默认模型
+            selected_nlp = self.nlp
+
+        logger.warning(f"🌐 检测语言: {lang}, 使用模型: {selected_nlp.meta['name'] if selected_nlp else 'None'}")
+
+        # 使用spaCy进行实体识别和词法分析
+        if selected_nlp:
+            try:
+                doc = selected_nlp(text)
+                logger.warning(f"📝 spaCy处理文本: '{text}' -> {len(doc.ents)} 个实体")
+
+                # 存储词法分析结果，供Neo4j使用
+                self._store_linguistic_analysis(doc, text)
+
+#
+            except Exception as e:
+                logger.warning(f"⚠️ spaCy实体识别失败: {e}")
+                import traceback
+                logger.warning(f"详细错误: {traceback.format_exc()}")
+        else:
+            logger.warning("⚠️ 没有可用的spaCy模型进行实体识别")
+
+        return entities
+
+    def _store_linguistic_analysis(self, doc, text: str):
+        """存储spaCy词法分析结果到Neo4j"""
+        if not self.graph_store:
+            return
