@@ -61,6 +61,8 @@ class Neo4jGraphStore:
             connection_acquisition_timeout=connection_acquisition_timeout
         )
 
+        # 创建索引
+        self._create_indexes()
 
     def _initialize_driver(self, **config):
         """初始化Neo4j驱动"""
@@ -95,3 +97,26 @@ class Neo4jGraphStore:
         except Exception as e:
             logger.error(f"❌ Neo4j连接失败: {e}")
             raise
+
+    def _create_indexes(self):
+        """创建必要的索引以提高查询性能"""
+        indexes = [
+            # 实体索引
+            "CREATE INDEX entity_id_index IF NOT EXISTS FOR (e:Entity) ON (e.id)",
+            "CREATE INDEX entity_name_index IF NOT EXISTS FOR (e:Entity) ON (e.name)",
+            "CREATE INDEX entity_type_index IF NOT EXISTS FOR (e:Entity) ON (e.type)",
+
+            # 记忆索引
+            "CREATE INDEX memory_id_index IF NOT EXISTS FOR (m:Memory) ON (m.id)",
+            "CREATE INDEX memory_type_index IF NOT EXISTS FOR (m:Memory) ON (m.memory_type)",
+            "CREATE INDEX memory_timestamp_index IF NOT EXISTS FOR (m:Memory) ON (m.timestamp)",
+        ]
+
+        with self.driver.session(database=self.database) as session:
+            for index_query in indexes:
+                try:
+                    session.run(index_query)
+                except Exception as e:
+                    logger.warning(f"索引创建跳过 (可能已存在): {e}")
+
+        logger.warning("✅ Neo4j索引创建完成")
