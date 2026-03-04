@@ -111,6 +111,16 @@ class SemanticMemory(BaseMemory):
         self.entities: Dict[str, Entity] = {}
         self.relations: List[Relation] = []
 
+        # 实体识别器
+        self.nlp = None
+        self._init_nlp()
+
+        # 记忆存储
+        self.semantic_memories: List[MemoryItem] = []
+        self.memory_embeddings: Dict[str, np.ndarray] = {}
+
+        logger.info("增强语义记忆初始化完成（使用Qdrant+Neo4j专业数据库）")
+
     def _init_embedding_model(self):
         """初始化统一嵌入模型（由 embedding_provider 管理）。"""
         try:
@@ -162,3 +172,44 @@ class SemanticMemory(BaseMemory):
             logger.info("💡 请检查数据库配置和网络连接")
             logger.info("💡 参考 DATABASE_SETUP_GUIDE.md 进行配置")
             raise
+
+    def _init_nlp(self):
+        """初始化NLP处理器 - 智能多语言支持"""
+        try:
+            import spacy
+            self.nlp_models = {}
+
+            # 尝试加载多语言模型
+            models_to_try = [
+                ("zh_core_web_sm", "中文"),
+                ("en_core_web_sm", "英文")
+            ]
+
+            loaded_models = []
+            for model_name, lang_name in models_to_try:
+                try:
+                    nlp = spacy.load(model_name)
+                    self.nlp_models[model_name] = nlp
+                    loaded_models.append(lang_name)
+                    logger.info(f"✅ 加载{lang_name}spaCy模型: {model_name}")
+                except OSError:
+                    logger.warning(f"⚠️ {lang_name}spaCy模型不可用: {model_name}")
+
+            # 设置主要NLP处理器
+            if "zh_core_web_sm" in self.nlp_models:
+                self.nlp = self.nlp_models["zh_core_web_sm"]
+                logger.info("🎯 主要使用中文spaCy模型")
+            elif "en_core_web_sm" in self.nlp_models:
+                self.nlp = self.nlp_models["en_core_web_sm"]
+                logger.info("🎯 主要使用英文spaCy模型")
+            else:
+                self.nlp = None
+                logger.warning("⚠️ 无可用spaCy模型，实体提取将受限")
+
+            if loaded_models:
+                logger.info(f"📚 可用语言模型: {', '.join(loaded_models)}")
+
+        except ImportError:
+            logger.warning("⚠️ spaCy不可用，实体提取将受限")
+            self.nlp = None
+            self.nlp_models = {}
