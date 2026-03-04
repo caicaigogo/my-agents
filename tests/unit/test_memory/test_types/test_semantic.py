@@ -13,12 +13,6 @@ class TestSemanticMemory(unittest.TestCase):
         self.config = MemoryConfig()
         self.memory = SemanticMemory(self.config)
 
-    def test_init(self):
-        load_dotenv()
-
-        self.config = MemoryConfig()
-        self.memory = SemanticMemory(self.config)
-
     def test_add(self):
 
         content = '今天天气很好,我想去上海看看'
@@ -42,5 +36,6 @@ class TestSemanticMemory(unittest.TestCase):
             metadata=metadata or {}
         )
 
+        print('start add')
         memory_item_id = self.memory.add(memory_item)
         print(memory_item_id)
