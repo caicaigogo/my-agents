@@ -83,7 +83,6 @@ class TestSemanticMemory(unittest.TestCase):
         memory_item_id = self.memory.add(memory_item)
         print(memory_item_id)
 
-
     def test_retrieve(self):
         importance = 0.2
         content = '今天 天气 不错, 去 上海 不知道 怎么样'
@@ -111,9 +110,42 @@ class TestSemanticMemory(unittest.TestCase):
 
         query = '今天 天气 很好 , 我 想 去 上海 看看'
         retrieve_results = self.memory.retrieve(query)
-        #
-        # [MemoryItem(id='fce5cf7f-7b15-4166-abd5-affb01adb385', content='今天 天气 很好', memory_type='episodic',
-        #             user_id='default_user', timestamp=datetime.datetime(2026, 2, 26, 13, 42, 3, 700824), importance=0.2,
-        #             metadata={'session_id': 'session_20260226_134203', 'context': {}, 'outcome': None,
-        #                       'relevance_score': 0.5280000000000001})]
+
+        # WARNING:hello_agents.memory.types.semantic:🔗 已将词法分析结果存储到Neo4j: 9 个词元
+        # WARNING:hello_agents.memory.types.semantic:🏷️ spaCy识别实体: '今天' -> DATE (置信度: N/A)
+        # WARNING:hello_agents.memory.types.semantic:🏷️ spaCy识别实体: '上海' -> GPE (置信度: N/A)
+        # WARNING:hello_agents.memory.storage.neo4j_store:🔍 找到 1 个相关实体
+        # WARNING:hello_agents.memory.storage.neo4j_store:🔍 找到 1 个相关实体
+        # WARNING:hello_agents.memory.types.semantic:🔍 查找记忆ID: ead17ece-df0f-4f33-8c7d-ec6956916f4f, 当前记忆数: 1
+        # WARNING:hello_agents.memory.types.semantic:✅ 找到记忆: 今天 天气 不错, 去 上海 不知道 怎么样...
+        # WARNING:hello_agents.memory.types.semantic:🕸️ Neo4j图搜索返回 1 个结果
+        # WARNING:hello_agents.memory.types.semantic:⚠️ 跳过重复内容: 今天 天气 不错, 去 上海 不知道 怎么样...
+        # WARNING:hello_agents.memory.types.semantic:🔍 向量结果: 3, 图结果: 1
+        # WARNING:hello_agents.memory.types.semantic:📝 去重后: 2, 过滤后: 0
+        # WARNING:hello_agents.memory.types.semantic:✅ 检索到 0 条相关记忆
+
+
+        # WARNING:hello_agents.memory.types.semantic:🏷️ spaCy识别实体: '今天' -> DATE (置信度: N/A)
+        # WARNING:hello_agents.memory.types.semantic:🏷️ spaCy识别实体: '上海' -> GPE (置信度: N/A)
+        # WARNING:hello_agents.memory.storage.neo4j_store:🔍 找到 1 个相关实体
+        # WARNING:hello_agents.memory.storage.neo4j_store:🔍 找到 1 个相关实体
+        # WARNING:hello_agents.memory.types.semantic:🔍 查找记忆ID: da22da71-c7d2-4021-ad42-9a2ac9bdd264, 当前记忆数: 1
+        # WARNING:hello_agents.memory.types.semantic:✅ 找到记忆: 今天 天气 不错, 去 上海 不知道 怎么样...
+        # WARNING:hello_agents.memory.types.semantic:🕸️ Neo4j图搜索返回 1 个结果
+        # WARNING:hello_agents.memory.types.semantic:⚠️ 跳过重复内容: 今天 天气 不错, 去 上海 不知道 怎么样...
+        # WARNING:hello_agents.memory.types.semantic:⚠️ 跳过重复内容: 今天 天气 不错, 去 上海 不知道 怎么样...
+        # WARNING:hello_agents.memory.types.semantic:⚠️ 跳过重复内容: 今天 天气 不错, 去 上海 不知道 怎么样...
+        # WARNING:hello_agents.memory.types.semantic:🔍 向量结果: 5, 图结果: 1
+        # WARNING:hello_agents.memory.types.semantic:📝 去重后: 2, 过滤后: 2
+        # WARNING:hello_agents.memory.types.semantic:  结果1: 向量=0.000, 图=0.600, 精确=0.000, 关键词=0.000, 公司=0.000, 实体=0.000, 综合=0.158
+        # WARNING:hello_agents.memory.types.semantic:  结果2: 向量=0.000, 图=0.000, 精确=0.000, 关键词=0.000, 公司=0.000, 实体=0.000, 综合=0.000
+        # WARNING:hello_agents.memory.types.semantic:✅ 检索到 2 条相关记忆
+        # [MemoryItem(id='da22da71-c7d2-4021-ad42-9a2ac9bdd264', content='今天 天气 不错, 去 上海 不知道 怎么样', memory_type='semantic', user_id='default_user', timestamp=datetime.datetime(2026, 3, 4, 15, 45, 34), importance=0.2, metadata={'combined_score': 0.1584, 'vector_score': 0.0, 'graph_score': 0.6, 'probability': 0.5395174083728296}), MemoryItem(id='ac081f3b-5fa7-450f-922c-6320c11d96ba', content='今天天气很好,我想去上海看看', memory_type='semantic', user_id='default_user', timestamp=datetime.datetime(2026, 3, 4, 15, 25, 22), importance=0.5, metadata={'combined_score': 0.0, 'vector_score': 0.0, 'graph_score': 0.0, 'probability': 0.46048259162717037})]
+
         print(retrieve_results)
+
+    def test_export_knowledge_graph(self):
+
+        knowledge_graph = self.memory.export_knowledge_graph()
+
+        print(knowledge_graph)

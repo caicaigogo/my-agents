@@ -350,6 +350,85 @@ class Neo4jGraphStore:
             logger.error(f"❌ 获取实体关系失败: {e}")
             return []
 
+    def delete_entity(self, entity_id: str) -> bool:
+        """
+        删除实体及其所有关系
+
+        Args:
+            entity_id: 实体ID
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            query = """
+            MATCH (e:Entity {id: $entity_id})
+            DETACH DELETE e
+            """
+
+            with self.driver.session(database=self.database) as session:
+                result = session.run(query, entity_id=entity_id)
+                summary = result.consume()
+
+                deleted_count = summary.counters.nodes_deleted
+                logger.warning(f"✅ 删除实体: {entity_id} (删除 {deleted_count} 个节点)")
+                return deleted_count > 0
+
+        except Exception as e:
+            logger.error(f"❌ 删除实体失败: {e}")
+            return False
+
+    def clear_all(self) -> bool:
+        """
+        清空所有数据
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            query = "MATCH (n) DETACH DELETE n"
+
+            with self.driver.session(database=self.database) as session:
+                result = session.run(query)
+                summary = result.consume()
+
+                deleted_nodes = summary.counters.nodes_deleted
+                deleted_relationships = summary.counters.relationships_deleted
+
+                logger.warning(f"✅ 清空Neo4j数据库: 删除 {deleted_nodes} 个节点, {deleted_relationships} 个关系")
+                return True
+
+        except Exception as e:
+            logger.error(f"❌ 清空数据库失败: {e}")
+            return False
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        获取图数据库统计信息
+
+        Returns:
+            Dict: 统计信息
+        """
+        try:
+            queries = {
+                "total_nodes": "MATCH (n) RETURN count(n) as count",
+                "total_relationships": "MATCH ()-[r]->() RETURN count(r) as count",
+                "entity_nodes": "MATCH (n:Entity) RETURN count(n) as count",
+                "memory_nodes": "MATCH (n:Memory) RETURN count(n) as count",
+            }
+
+            stats = {}
+            with self.driver.session(database=self.database) as session:
+                for key, query in queries.items():
+                    result = session.run(query)
+                    record = result.single()
+                    stats[key] = record["count"] if record else 0
+
+            return stats
+
+        except Exception as e:
+            logger.error(f"❌ 获取统计信息失败: {e}")
+            return {}
 
     def health_check(self) -> bool:
         """

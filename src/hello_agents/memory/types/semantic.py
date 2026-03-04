@@ -552,7 +552,7 @@ class SemanticMemory(BaseMemory):
             result["combined_score"] = combined_score
 
         # 应用最小相关性阈值
-        min_threshold = 0.1  # 最小相关性阈值
+        min_threshold = 0  # 最小相关性阈值
         filtered_results = [
             result for result in combined.values()
             if result["combined_score"] >= min_threshold
@@ -840,6 +840,38 @@ class SemanticMemory(BaseMemory):
             logger.warning(f"计算图相关性失败: {e}")
             return 0.0
 
+    def _add_or_update_entity(self, entity: Entity):
+        """添加或更新实体"""
+        if entity.entity_id in self.entities:
+            # 更新现有实体
+            existing = self.entities[entity.entity_id]
+            existing.frequency += 1
+            existing.updated_at = datetime.now()
+        else:
+            # 添加新实体
+            self.entities[entity.entity_id] = entity
+
+    def _add_or_update_relation(self, relation: Relation):
+        """添加或更新关系"""
+        # 检查是否已存在相同关系
+        existing_relation = None
+        for r in self.relations:
+            if (r.from_entity == relation.from_entity and
+                r.to_entity == relation.to_entity and
+                r.relation_type == relation.relation_type):
+                existing_relation = r
+                break
+
+        if existing_relation:
+            # 更新现有关系
+            existing_relation.frequency += 1
+            existing_relation.strength = min(1.0, existing_relation.strength + 0.1)
+        else:
+            # 添加新关系
+            self.relations.append(relation)
+
+    # 旧的图相关性计算方法已被 _calculate_graph_relevance_neo4j 替代
+
     def _find_memory_by_id(self, memory_id: str) -> Optional[MemoryItem]:
         """根据ID查找记忆"""
         logger.warning(f"🔍 查找记忆ID: {memory_id}, 当前记忆数: {len(self.semantic_memories)}")
@@ -849,3 +881,302 @@ class SemanticMemory(BaseMemory):
                 return memory
         logger.warning(f"❌ 未找到记忆ID: {memory_id}")
         return None
+
+    def update(
+        self,
+        memory_id: str,
+        content: str = None,
+        importance: float = None,
+        metadata: Dict[str, Any] = None
+    ) -> bool:
+        """更新语义记忆"""
+        memory = self._find_memory_by_id(memory_id)
+        if not memory:
+            return False
+
+        try:
+            if content is not None:
+                # 重新生成嵌入和提取实体
+                embedding = self.embedding_model.encode(content)
+                self.memory_embeddings[memory_id] = embedding
+
+                # 清理旧的实体关系
+                old_entities = memory.metadata.get("entities", [])
+                self._cleanup_entities_and_relations(old_entities)
+
+                # 提取新的实体和关系
+                memory.content = content
+                entities = self._extract_entities(content)
+                relations = self._extract_relations(content, entities)
+
+                # 更新知识图谱
+                for entity in entities:
+                    self._add_or_update_entity(entity)
+                for relation in relations:
+                    self._add_or_update_relation(relation)
+
+                # 更新元数据
+                memory.metadata["entities"] = [e.entity_id for e in entities]
+                memory.metadata["relations"] = [
+                    f"{r.from_entity}-{r.relation_type}-{r.to_entity}" for r in relations
+                ]
+
+            if importance is not None:
+                memory.importance = importance
+
+            if metadata is not None:
+                memory.metadata.update(metadata)
+
+                return True
+
+        except Exception as e:
+            logger.error(f"❌ 更新记忆失败: {e}")
+        return False
+
+    def remove(self, memory_id: str) -> bool:
+        """删除语义记忆"""
+        memory = self._find_memory_by_id(memory_id)
+        if not memory:
+            return False
+
+        try:
+            # 删除向量
+            self.vector_store.delete_memories([memory_id])
+
+            # 清理实体和关系
+            entities = memory.metadata.get("entities", [])
+            self._cleanup_entities_and_relations(entities)
+
+            # 删除记忆
+            self.semantic_memories.remove(memory)
+            if memory_id in self.memory_embeddings:
+                del self.memory_embeddings[memory_id]
+
+                return True
+
+        except Exception as e:
+            logger.error(f"❌ 删除记忆失败: {e}")
+        return False
+
+    def _cleanup_entities_and_relations(self, entity_ids: List[str]):
+        """清理实体和关系"""
+        # 这里可以实现更智能的清理逻辑
+        # 例如，如果实体不再被任何记忆引用，则删除它
+        pass
+
+    def has_memory(self, memory_id: str) -> bool:
+        """检查记忆是否存在"""
+        return self._find_memory_by_id(memory_id) is not None
+
+    def forget(self, strategy: str = "importance_based", threshold: float = 0.1, max_age_days: int = 30) -> int:
+        """语义记忆遗忘机制（硬删除）"""
+        forgotten_count = 0
+        current_time = datetime.now()
+
+        to_remove = []  # 收集要删除的记忆ID
+
+        for memory in self.semantic_memories:
+            should_forget = False
+
+            if strategy == "importance_based":
+                # 基于重要性遗忘
+                if memory.importance < threshold:
+                    should_forget = True
+            elif strategy == "time_based":
+                # 基于时间遗忘
+                cutoff_time = current_time - timedelta(days=max_age_days)
+                if memory.timestamp < cutoff_time:
+                    should_forget = True
+            elif strategy == "capacity_based":
+                # 基于容量遗忘（保留最重要的）
+                if len(self.semantic_memories) > self.config.max_capacity:
+                    sorted_memories = sorted(self.semantic_memories, key=lambda m: m.importance)
+                    excess_count = len(self.semantic_memories) - self.config.max_capacity
+                    if memory in sorted_memories[:excess_count]:
+                        should_forget = True
+
+            if should_forget:
+                to_remove.append(memory.id)
+
+        # 执行硬删除
+        for memory_id in to_remove:
+            if self.remove(memory_id):
+                forgotten_count += 1
+                logger.warning(f"语义记忆硬删除: {memory_id[:8]}... (策略: {strategy})")
+
+        return forgotten_count
+
+    def clear(self):
+        """清空所有语义记忆 - 包括专业数据库"""
+        try:
+            # 清空Qdrant向量数据库
+            if self.vector_store:
+                success = self.vector_store.clear_collection()
+                if success:
+                    logger.warning("✅ Qdrant向量数据库已清空")
+                else:
+                    logger.warning("⚠️ Qdrant清空失败")
+
+            # 清空Neo4j图数据库
+            if self.graph_store:
+                success = self.graph_store.clear_all()
+                if success:
+                    logger.warning("✅ Neo4j图数据库已清空")
+                else:
+                    logger.warning("⚠️ Neo4j清空失败")
+
+            # 清空本地缓存
+            self.semantic_memories.clear()
+            self.memory_embeddings.clear()
+            self.entities.clear()
+            self.relations.clear()
+
+            logger.warning("🧹 语义记忆系统已完全清空")
+
+        except Exception as e:
+            logger.error(f"❌ 清空语义记忆失败: {e}")
+            # 即使数据库清空失败，也要清空本地缓存
+        self.semantic_memories.clear()
+        self.memory_embeddings.clear()
+        self.entities.clear()
+        self.relations.clear()
+
+    def get_all(self) -> List[MemoryItem]:
+        """获取所有语义记忆"""
+        return self.semantic_memories.copy()
+
+    def get_stats(self) -> Dict[str, Any]:
+        """获取语义记忆统计信息"""
+        graph_stats = {}
+        try:
+            if self.graph_store:
+                graph_stats = self.graph_store.get_stats() or {}
+        except Exception:
+            graph_stats = {}
+
+        # 硬删除模式：所有记忆都是活跃的
+        active_memories = self.semantic_memories
+
+        return {
+            "count": len(active_memories),  # 活跃记忆数量
+            "forgotten_count": 0,  # 硬删除模式下已遗忘的记忆会被直接删除
+            "total_count": len(self.semantic_memories),  # 总记忆数量
+            "entities_count": len(self.entities),
+            "relations_count": len(self.relations),
+            "graph_nodes": graph_stats.get("total_nodes", 0),
+            "graph_edges": graph_stats.get("total_relationships", 0),
+            "avg_importance": sum(m.importance for m in active_memories) / len(active_memories) if active_memories else 0.0,
+            "memory_type": "enhanced_semantic"
+        }
+
+    def get_entity(self, entity_id: str) -> Optional[Entity]:
+        """获取实体"""
+        return self.entities.get(entity_id)
+
+    def search_entities(self, query: str, limit: int = 10) -> List[Entity]:
+        """搜索实体"""
+        query_lower = query.lower()
+        scored_entities = []
+
+        for entity in self.entities.values():
+            score = 0.0
+
+            # 名称匹配
+            if query_lower in entity.name.lower():
+                score += 2.0
+
+            # 类型匹配
+            if query_lower in entity.entity_type.lower():
+                score += 1.0
+
+            # 描述匹配
+            if query_lower in entity.description.lower():
+                score += 0.5
+
+            # 频率权重
+            score *= math.log(1 + entity.frequency)
+
+            if score > 0:
+                scored_entities.append((score, entity))
+
+        scored_entities.sort(key=lambda x: x[0], reverse=True)
+        return [entity for _, entity in scored_entities[:limit]]
+
+    def get_related_entities(
+        self,
+        entity_id: str,
+        relation_types: List[str] = None,
+        max_hops: int = 2
+    ) -> List[Dict[str, Any]]:
+        """获取相关实体 - 使用Neo4j图数据库"""
+
+        related = []
+
+        try:
+            # 使用Neo4j图数据库查找相关实体
+            if not self.graph_store:
+                logger.warning("⚠️ Neo4j图数据库不可用")
+                return []
+
+            # 使用Neo4j查找相关实体
+            related_entities = self.graph_store.find_related_entities(
+                entity_id=entity_id,
+                relationship_types=relation_types,
+                max_depth=max_hops,
+                limit=50
+            )
+
+            # 转换格式以保持兼容性
+            for entity_data in related_entities:
+                # 尝试从本地缓存获取实体对象
+                entity_obj = self.entities.get(entity_data.get("id"))
+                if not entity_obj:
+                    # 如果本地缓存没有，创建临时实体对象
+                    entity_obj = Entity(
+                        entity_id=entity_data.get("id", entity_id),
+                        name=entity_data.get("name", ""),
+                        entity_type=entity_data.get("type", "MISC")
+                    )
+
+                    related.append({
+                    "entity": entity_obj,
+                    "relation_type": entity_data.get("relationship_path", ["RELATED"])[-1] if entity_data.get("relationship_path") else "RELATED",
+                    "strength": 1.0 / max(entity_data.get("distance", 1), 1),  # 距离越近强度越高
+                    "distance": entity_data.get("distance", max_hops)
+                })
+
+            # 按距离和强度排序
+            related.sort(key=lambda x: (x["distance"], -x["strength"]))
+
+        except Exception as e:
+            logger.error(f"❌ 获取相关实体失败: {e}")
+
+        return related
+
+    def export_knowledge_graph(self) -> Dict[str, Any]:
+        """导出知识图谱 - 从Neo4j获取统计信息"""
+        try:
+            # 从Neo4j获取统计信息
+            stats = {}
+            if self.graph_store:
+                stats = self.graph_store.get_stats()
+
+            return {
+                "entities": {eid: entity.to_dict() for eid, entity in self.entities.items()},
+                "relations": [relation.to_dict() for relation in self.relations],
+                "graph_stats": {
+                    "total_nodes": stats.get("total_nodes", 0),
+                    "entity_nodes": stats.get("entity_nodes", 0),
+                    "memory_nodes": stats.get("memory_nodes", 0),
+                    "total_relationships": stats.get("total_relationships", 0),
+                    "cached_entities": len(self.entities),
+                    "cached_relations": len(self.relations)
+                }
+            }
+        except Exception as e:
+            logger.error(f"❌ 导出知识图谱失败: {e}")
+            return {
+                "entities": {},
+                "relations": [],
+                "graph_stats": {"error": str(e)}
+            }
