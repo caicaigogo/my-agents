@@ -107,6 +107,9 @@ class SemanticMemory(BaseMemory):
         self.graph_store = None
         self._init_databases()
 
+        # 实体和关系缓存 (用于快速访问)
+        self.entities: Dict[str, Entity] = {}
+        self.relations: List[Relation] = []
 
     def _init_embedding_model(self):
         """初始化统一嵌入模型（由 embedding_provider 管理）。"""
@@ -130,9 +133,32 @@ class SemanticMemory(BaseMemory):
             # 获取数据库配置
             db_config = get_database_config()
 
+            # 初始化Qdrant向量数据库（使用连接管理器避免重复连接）
+            from ..storage.qdrant_store import QdrantConnectionManager
+            qdrant_config = db_config.get_qdrant_config() or {}
+            qdrant_config["vector_size"] = get_dimension()
+            self.vector_store = QdrantConnectionManager.get_instance(**qdrant_config)
+            logger.info("✅ Qdrant向量数据库初始化完成")
+
+            # 初始化Neo4j图数据库
+            from ..storage.neo4j_store import Neo4jGraphStore
+            neo4j_config = db_config.get_neo4j_config()
+            self.graph_store = Neo4jGraphStore(**neo4j_config)
+            logger.info("✅ Neo4j图数据库初始化完成")
+
+            # 验证连接
+            vector_health = self.vector_store.health_check()
+            graph_health = self.graph_store.health_check()
+
+            if not vector_health:
+                logger.warning("⚠️ Qdrant连接异常，部分功能可能受限")
+            if not graph_health:
+                logger.warning("⚠️ Neo4j连接异常，图搜索功能可能受限")
+
+            logger.info(f"🏥 数据库健康状态: Qdrant={'✅' if vector_health else '❌'}, Neo4j={'✅' if graph_health else '❌'}")
+
         except Exception as e:
             logger.error(f"❌ 数据库初始化失败: {e}")
             logger.info("💡 请检查数据库配置和网络连接")
             logger.info("💡 参考 DATABASE_SETUP_GUIDE.md 进行配置")
             raise
-#

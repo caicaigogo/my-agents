@@ -10,7 +10,7 @@ class TestNeo4jGraphStore(unittest.TestCase):
     def test_init(self):
         load_dotenv()
 
-        neo4j_uri = os.environ['neo4j_uri']
+        neo4j_uri = os.environ['NEO4J_URI']
         username: str = "neo4j"
-        password: str = os.environ['neo4j_password']
+        password: str = os.environ['NEO4J_PASSWORD']
         Neo4jGraphStore(uri=neo4j_uri, username=username, password=password)
