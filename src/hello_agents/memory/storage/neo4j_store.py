@@ -16,7 +16,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-
 class Neo4jGraphStore:
     """Neo4j图数据库存储实现"""
 
@@ -120,6 +119,101 @@ class Neo4jGraphStore:
                     logger.warning(f"索引创建跳过 (可能已存在): {e}")
 
         logger.warning("✅ Neo4j索引创建完成")
+
+    def add_entity(self, entity_id: str, name: str, entity_type: str, properties: Dict[str, Any] = None) -> bool:
+        """
+        添加实体节点
+
+        Args:
+            entity_id: 实体ID
+            name: 实体名称
+            entity_type: 实体类型
+            properties: 附加属性
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            props = properties or {}
+            props.update({
+                "id": entity_id,
+                "name": name,
+                "type": entity_type,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            })
+
+            query = """
+            MERGE (e:Entity {id: $entity_id})
+            SET e += $properties
+            RETURN e
+            """
+
+            with self.driver.session(database=self.database) as session:
+                result = session.run(query, entity_id=entity_id, properties=props)
+                record = result.single()
+
+                if record:
+                    logger.warning(f"✅ 添加实体: {name} ({entity_type})")
+                    return True
+                return False
+
+        except Exception as e:
+            logger.error(f"❌ 添加实体失败: {e}")
+            return False
+
+    def add_relationship(
+        self,
+        from_entity_id: str,
+        to_entity_id: str,
+        relationship_type: str,
+        properties: Dict[str, Any] = None
+    ) -> bool:
+        """
+        添加实体间关系
+
+        Args:
+            from_entity_id: 源实体ID
+            to_entity_id: 目标实体ID
+            relationship_type: 关系类型
+            properties: 关系属性
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            props = properties or {}
+            props.update({
+                "type": relationship_type,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            })
+
+            query = f"""
+            MATCH (from:Entity {{id: $from_id}})
+            MATCH (to:Entity {{id: $to_id}})
+            MERGE (from)-[r:{relationship_type}]->(to)
+            SET r += $properties
+            RETURN r
+            """
+
+            with self.driver.session(database=self.database) as session:
+                result = session.run(
+                    query,
+                    from_id=from_entity_id,
+                    to_id=to_entity_id,
+                    properties=props
+                )
+                record = result.single()
+
+                if record:
+                    logger.warning(f"✅ 添加关系: {from_entity_id} -{relationship_type}-> {to_entity_id}")
+                    return True
+                return False
+
+        except Exception as e:
+            logger.error(f"❌ 添加关系失败: {e}")
+            return False
 
     def health_check(self) -> bool:
         """
