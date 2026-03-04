@@ -120,3 +120,27 @@ class Neo4jGraphStore:
                     logger.warning(f"索引创建跳过 (可能已存在): {e}")
 
         logger.warning("✅ Neo4j索引创建完成")
+
+    def health_check(self) -> bool:
+        """
+        健康检查
+
+        Returns:
+            bool: 服务是否健康
+        """
+        try:
+            with self.driver.session(database=self.database) as session:
+                result = session.run("RETURN 1 as health")
+                record = result.single()
+                return record["health"] == 1
+        except Exception as e:
+            logger.error(f"❌ Neo4j健康检查失败: {e}")
+            return False
+
+    def __del__(self):
+        """析构函数，清理资源"""
+        if hasattr(self, 'driver') and self.driver:
+            try:
+                self.driver.close()
+            except:
+                pass
