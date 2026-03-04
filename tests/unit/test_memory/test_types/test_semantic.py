@@ -148,4 +148,7 @@ class TestSemanticMemory(unittest.TestCase):
 
         knowledge_graph = self.memory.export_knowledge_graph()
 
+        # {'entities': {}, 'relations': [],
+        #  'graph_stats': {'total_nodes': 100, 'entity_nodes': 100, 'memory_nodes': 0, 'total_relationships': 96,
+        #                  'cached_entities': 0, 'cached_relations': 0}}
         print(knowledge_graph)

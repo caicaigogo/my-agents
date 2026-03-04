@@ -9,7 +9,8 @@ from .base import MemoryItem, MemoryConfig
 
 from .types.working import WorkingMemory
 from .types.episodic import EpisodicMemory
-
+from .types.semantic import SemanticMemory
+from .types.perceptual import PerceptualMemory
 # 存储和检索功能已被各记忆类型内部实现替代
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,12 @@ class MemoryManager:
 
         if enable_episodic:
             self.memory_types['episodic'] = EpisodicMemory(self.config)
+
+        if enable_semantic:
+            self.memory_types['semantic'] = SemanticMemory(self.config)
+
+        if enable_perceptual:
+            self.memory_types['perceptual'] = PerceptualMemory(self.config)
 
         logger.info(f"MemoryManager初始化完成，启用记忆类型: {list(self.memory_types.keys())}")
 
@@ -283,6 +290,29 @@ class MemoryManager:
             memory_instance.clear()
         logger.info("所有记忆已清空")
 
+
+    def _classify_memory_type(self, content: str, metadata: Optional[Dict[str, Any]]) -> str:
+        """自动分类记忆类型"""
+        if metadata and metadata.get("type"):
+            return metadata["type"]
+
+        # 简单的分类逻辑，可以扩展为更复杂的分类器
+        if self._is_episodic_content(content):
+            return "episodic"
+        elif self._is_semantic_content(content):
+            return "semantic"
+        else:
+            return "working"
+
+    def _is_episodic_content(self, content: str) -> bool:
+        """判断是否为情景记忆内容"""
+        episodic_keywords = ["昨天", "今天", "明天", "上次", "记得", "发生", "经历"]
+        return any(keyword in content for keyword in episodic_keywords)
+
+    def _is_semantic_content(self, content: str) -> bool:
+        """判断是否为语义记忆内容"""
+        semantic_keywords = ["定义", "概念", "规则", "知识", "原理", "方法"]
+        return any(keyword in content for keyword in semantic_keywords)
 
     def _calculate_importance(self, content: str, metadata: Optional[Dict[str, Any]]) -> float:
         """计算记忆重要性"""

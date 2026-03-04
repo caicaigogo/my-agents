@@ -5,4 +5,4 @@
 # python -m unittest -v tests.unit.test_memory.test_storage.test_neo4j_store.TestNeo4jGraphStore
 #python -m unittest -v tests.unit.test_memory.test_types.test_semantic.TestSemanticMemory
 #python -m unittest -v tests.unit.test_memory.test_types.test_semantic.TestSemanticMemory.test_retrieve
-python -m unittest -v tests.unit.test_memory.test_types.test_semantic.TestSemanticMemory.test_retrieve
+python -m unittest -v tests.unit.test_memory.test_types.test_semantic.TestSemanticMemory.test_export_knowledge_graph
