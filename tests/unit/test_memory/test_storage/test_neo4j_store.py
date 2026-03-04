@@ -2,7 +2,7 @@ import unittest
 from dotenv import load_dotenv
 import os
 
-from neo4j import GraphDatabase
+from hello_agents.memory.storage import Neo4jGraphStore
 
 
 class TestNeo4jGraphStore(unittest.TestCase):
@@ -13,10 +13,4 @@ class TestNeo4jGraphStore(unittest.TestCase):
         neo4j_uri = os.environ['neo4j_uri']
         username: str = "neo4j"
         password: str = os.environ['neo4j_password']
-
-        self.driver = GraphDatabase.driver(
-            neo4j_uri,
-            auth=(username, password),
-        )
-
-        print(self.driver)
+        Neo4jGraphStore(uri=neo4j_uri, username=username, password=password)
