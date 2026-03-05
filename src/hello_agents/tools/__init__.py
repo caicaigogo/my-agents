@@ -1,3 +1,5 @@
+"""工具系统"""
+
 from .base import Tool, ToolParameter
 from .registry import ToolRegistry, global_registry
 
@@ -5,6 +7,8 @@ from .registry import ToolRegistry, global_registry
 from .builtin.search_tool import SearchTool
 from .builtin.calculator import CalculatorTool
 from .builtin.memory_tool import MemoryTool
+from .builtin.rag_tool import RAGTool
+
 
 # 高级功能
 from .chain import ToolChain, ToolChainManager, create_research_chain, create_simple_chain
@@ -21,6 +25,7 @@ __all__ = [
     "SearchTool",
     "CalculatorTool",
     "MemoryTool",
+    "RAGTool",
 
     # 工具链功能
     "ToolChain",
