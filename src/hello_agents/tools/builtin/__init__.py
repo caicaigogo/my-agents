@@ -24,7 +24,6 @@ from .note_tool import NoteTool
 from .terminal_tool import TerminalTool
 from .protocol_tools import MCPTool, A2ATool, ANPTool
 
-
 __all__ = [
     "SearchTool",
     "CalculatorTool",
