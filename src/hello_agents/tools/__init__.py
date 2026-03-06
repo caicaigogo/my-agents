@@ -12,7 +12,7 @@ from .builtin.note_tool import NoteTool
 from .builtin.terminal_tool import TerminalTool
 
 # 协议工具
-from .builtin.protocol_tools import MCPTool
+from .builtin.protocol_tools import MCPTool, A2ATool, ANPTool
 
 # 高级功能
 from .chain import ToolChain, ToolChainManager, create_research_chain, create_simple_chain
@@ -35,6 +35,9 @@ __all__ = [
 
     # 协议工具
     "MCPTool",
+    "A2ATool",
+    "ANPTool",
+
 
     # 工具链功能
     "ToolChain",

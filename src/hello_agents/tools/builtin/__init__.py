@@ -22,7 +22,7 @@ from .memory_tool import MemoryTool
 from .rag_tool import RAGTool
 from .note_tool import NoteTool
 from .terminal_tool import TerminalTool
-from .protocol_tools import MCPTool
+from .protocol_tools import MCPTool, A2ATool, ANPTool
 
 
 __all__ = [
@@ -33,4 +33,6 @@ __all__ = [
     "NoteTool",
     "TerminalTool",
     "MCPTool",
+    "A2ATool",
+    "ANPTool",
 ]
