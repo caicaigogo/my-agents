@@ -8,7 +8,7 @@ from .builtin.search_tool import SearchTool
 from .builtin.calculator import CalculatorTool
 from .builtin.memory_tool import MemoryTool
 from .builtin.rag_tool import RAGTool
-
+from .builtin.note_tool import NoteTool
 
 # 高级功能
 from .chain import ToolChain, ToolChainManager, create_research_chain, create_simple_chain
@@ -26,6 +26,7 @@ __all__ = [
     "CalculatorTool",
     "MemoryTool",
     "RAGTool",
+    "NoteTool",
 
     # 工具链功能
     "ToolChain",
