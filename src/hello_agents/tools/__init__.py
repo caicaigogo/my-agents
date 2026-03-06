@@ -11,7 +11,8 @@ from .builtin.rag_tool import RAGTool
 from .builtin.note_tool import NoteTool
 from .builtin.terminal_tool import TerminalTool
 
-
+# 协议工具
+from .builtin.protocol_tools import MCPTool
 
 # 高级功能
 from .chain import ToolChain, ToolChainManager, create_research_chain, create_simple_chain
@@ -31,6 +32,9 @@ __all__ = [
     "RAGTool",
     "NoteTool",
     "TerminalTool",
+
+    # 协议工具
+    "MCPTool",
 
     # 工具链功能
     "ToolChain",
