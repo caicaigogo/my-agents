@@ -179,7 +179,7 @@ class TestMCPClient(unittest.IsolatedAsyncioTestCase):
 
     async def test_http_source(self):
 
-        url = 'https://copilot-api.octocorp.ghe.com/mcp'
+        url = 'https://api.githubcopilot.com/mcp/'
         github_access_token = os.getenv('GITHUB_ACCESS_TOKEN')
         print(github_access_token)
         headers = {'Authorization': github_access_token}
