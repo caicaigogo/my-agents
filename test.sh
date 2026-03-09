@@ -6,3 +6,4 @@
 #python -m unittest -v tests.unit.test_memory.test_types.test_semantic.TestSemanticMemory
 #python -m unittest -v tests.unit.test_memory.test_types.test_semantic.TestSemanticMemory.test_retrieve
 python -m unittest -v tests.unit.test_memory.test_types.test_semantic.TestSemanticMemory.test_export_knowledge_graph
+python -m unittest -v tests.unit.test_protocols.test_mcp.TestSemanticMemory.test_client.TestMCPClient

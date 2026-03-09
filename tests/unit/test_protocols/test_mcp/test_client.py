@@ -1,5 +1,28 @@
 import unittest
 from fastmcp import Client, FastMCP
+from fastmcp.client.transports import PythonStdioTransport, SSETransport, StreamableHttpTransport
+
+import os
+from pathlib import Path
+
+
+def find_project_root_with_tests(start_path=None):
+    """
+    从 start_path 开始向上查找，直到找到包含 'tests' 目录的父目录。
+    返回该父目录的 Path 对象。
+    如果没找到，抛出 FileNotFoundError。
+    """
+    if start_path is None:
+        start_path = Path.cwd()
+    else:
+        start_path = Path(start_path).resolve()
+
+    # 限制向上查找，避免无限循环（比如到根目录为止）
+    for parent in [start_path] + list(start_path.parents):
+        if (parent / "tests").is_dir():
+            return parent
+
+    raise FileNotFoundError("未找到包含 'tests' 目录的项目根目录")
 
 
 def _create_builtin_server():
@@ -76,7 +99,10 @@ def _create_builtin_server():
 
 
 class TestMCPClient(unittest.IsolatedAsyncioTestCase):
-    # IsolatedAsyncioTestCase 支持 async def setUp 和 async def test_...
+    # IsolatedAsyncioTestCase 支持
+    def setUp(self):
+        project_root = find_project_root_with_tests()
+        os.chdir(project_root)
 
     async def test_FastMCP_source(self):
         # 直接定义为 async，IsolatedAsyncioTestCase 会自动 await 它
@@ -137,3 +163,16 @@ class TestMCPClient(unittest.IsolatedAsyncioTestCase):
             # text='请审查以下代码，关注性能、安全性和可维护性：', annotations=None, meta=None))]
             prompt = await client.get_prompt("code_review")
             print(f"提示内容：{prompt}")
+
+    async def test_python_source(self):
+        # 直接定义为 async，IsolatedAsyncioTestCase 会自动 await 它
+
+        script_path = 'src/hello_agents/protocols/mcp/server.py'
+        print(os.path.exists(script_path))
+        server_source = PythonStdioTransport(script_path=script_path)
+        print(server_source)
+
+        async with Client(server_source) as client:
+            print('enter')
+            tools = await client.list_tools()
+            print("可用工具:", [t.name for t in tools])
