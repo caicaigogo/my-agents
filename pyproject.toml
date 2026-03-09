@@ -34,9 +34,19 @@ memory = [
     "scikit-learn>=1.0.0",           # 机器学习工具
 ]
 
+# 协议支持依赖
+protocols = [
+    "fastmcp>=2.0.0,<3.0.0",        # MCP 协议支持
+]
+
+# 评估系统依赖（不含BFCL）
+evaluation = [
+    "huggingface_hub>=0.20.0,<1.0.0",  # HuggingFace Hub API
+]
+
 # 全部功能（不含evaluation-bfcl，因其与numpy>=2.0冲突）
 all = [
-    "hello-agents[search,memory]",
+    "hello-agents[search,memory,protocols,evaluation]",
 ]
 
 [tool.setuptools.packages.find]
