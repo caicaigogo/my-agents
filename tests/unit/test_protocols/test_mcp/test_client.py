@@ -1,7 +1,7 @@
 import unittest
 from fastmcp import Client, FastMCP
 from fastmcp.client.transports import PythonStdioTransport, SSETransport, StreamableHttpTransport
-
+from dotenv import load_dotenv
 import os
 from pathlib import Path
 
@@ -101,6 +101,7 @@ def _create_builtin_server():
 class TestMCPClient(unittest.IsolatedAsyncioTestCase):
     # IsolatedAsyncioTestCase 支持
     def setUp(self):
+        load_dotenv()
         project_root = find_project_root_with_tests()
         os.chdir(project_root)
 
@@ -165,7 +166,6 @@ class TestMCPClient(unittest.IsolatedAsyncioTestCase):
             print(f"提示内容：{prompt}")
 
     async def test_python_source(self):
-        # 直接定义为 async，IsolatedAsyncioTestCase 会自动 await 它
 
         script_path = 'src/hello_agents/protocols/mcp/server.py'
         print(os.path.exists(script_path))
@@ -173,6 +173,19 @@ class TestMCPClient(unittest.IsolatedAsyncioTestCase):
         print(server_source)
 
         async with Client(server_source) as client:
-            print('enter')
+            tools = await client.list_tools()
+            # 可用工具: ['calculator', 'greet']
+            print("可用工具:", [t.name for t in tools])
+
+    async def test_http_source(self):
+
+        url = 'https://copilot-api.octocorp.ghe.com/mcp'
+        github_access_token = os.getenv('GITHUB_ACCESS_TOKEN')
+        print(github_access_token)
+        headers = {'Authorization': github_access_token}
+        server_source = StreamableHttpTransport(url=url, headers=headers)
+        print(server_source)
+
+        async with Client(server_source) as client:
             tools = await client.list_tools()
             print("可用工具:", [t.name for t in tools])
