@@ -41,27 +41,27 @@ except ImportError:
     def parse_context(*args, **kwargs):
         raise ImportError("MCP requires fastmcp: pip install fastmcp")
 
-# # A2A 协议 - 导出所有常用类
-# from .a2a import (
-#     A2AAgent,
-#     A2AServer,
-#     A2AClient,
-#     AgentNetwork,
-#     AgentRegistry,
-#     A2AMessage,
-#     MessageType,
-#     create_message,
-#     parse_message,
-# )
-#
-# # ANP 协议 - 导出所有常用类
-# from .anp import (
-#     ANPDiscovery,
-#     ANPNetwork,
-#     ServiceInfo,
-#     register_service,
-#     discover_service,
-# )
+# A2A 协议 - 导出所有常用类
+from .a2a import (
+    A2AAgent,
+    A2AServer,
+    A2AClient,
+    AgentNetwork,
+    AgentRegistry,
+    A2AMessage,
+    MessageType,
+    create_message,
+    parse_message,
+)
+
+# ANP 协议 - 导出所有常用类
+from .anp import (
+    ANPDiscovery,
+    ANPNetwork,
+    ServiceInfo,
+    register_service,
+    discover_service,
+)
 
 __all__ = [
     # 基础协议
@@ -73,22 +73,22 @@ __all__ = [
     "create_context",
     "parse_context",
 
-#     # A2A 协议（可选）
-#     "A2AAgent",
-#     "A2AServer",
-#     "A2AClient",
-#     "AgentNetwork",
-#     "AgentRegistry",
-#     "A2AMessage",
-#     "MessageType",
-#     "create_message",
-#     "parse_message",
-#
-#     # ANP 协议
-#     "ANPDiscovery",
-#     "ANPNetwork",
-#     "ServiceInfo",
-#     "register_service",
-#     "discover_service",
+    # A2A 协议（可选）
+    "A2AAgent",
+    "A2AServer",
+    "A2AClient",
+    "AgentNetwork",
+    "AgentRegistry",
+    "A2AMessage",
+    "MessageType",
+    "create_message",
+    "parse_message",
+
+    # ANP 协议
+    "ANPDiscovery",
+    "ANPNetwork",
+    "ServiceInfo",
+    "register_service",
+    "discover_service",
 ]
 

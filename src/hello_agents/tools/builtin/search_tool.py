@@ -228,3 +228,9 @@ class SearchTool(Tool):
                     lines.append(f"- {notice}")
 
         return "\n".join(line for line in lines if line is not None)
+
+# 便捷函数
+
+def search(query: str, backend: str = "hybrid") -> str:
+    tool = SearchTool(backend=backend)
+    return tool.run({"input": query, "backend": backend})  # type: ignore[return-value]
