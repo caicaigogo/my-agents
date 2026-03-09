@@ -14,6 +14,9 @@ from .builtin.terminal_tool import TerminalTool
 # 协议工具
 from .builtin.protocol_tools import MCPTool, A2ATool, ANPTool
 
+# 评估工具（第12章）
+from .builtin.bfcl_evaluation_tool import BFCLEvaluationTool
+
 # RL训练工具（第11章）
 from .builtin.rl_training_tool import RLTrainingTool
 
@@ -40,6 +43,9 @@ __all__ = [
     "MCPTool",
     "A2ATool",
     "ANPTool",
+
+    # 评估工具
+    "BFCLEvaluationTool",
 
     # RL训练工具
     "RLTrainingTool",
