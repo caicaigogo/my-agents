@@ -8,9 +8,10 @@ Benchmarks 模块
 """
 
 from hello_agents.evaluation.benchmarks.bfcl.evaluator import BFCLEvaluator
-
+from hello_agents.evaluation.benchmarks.gaia.evaluator import GAIAEvaluator
 
 __all__ = [
     "BFCLEvaluator",
+    "GAIAEvaluator",
 ]
 

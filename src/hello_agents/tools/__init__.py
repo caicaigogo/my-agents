@@ -16,6 +16,8 @@ from .builtin.protocol_tools import MCPTool, A2ATool, ANPTool
 
 # 评估工具（第12章）
 from .builtin.bfcl_evaluation_tool import BFCLEvaluationTool
+from .builtin.gaia_evaluation_tool import GAIAEvaluationTool
+
 
 # RL训练工具（第11章）
 from .builtin.rl_training_tool import RLTrainingTool
@@ -46,6 +48,7 @@ __all__ = [
 
     # 评估工具
     "BFCLEvaluationTool",
+    "GAIAEvaluationTool",
 
     # RL训练工具
     "RLTrainingTool",
